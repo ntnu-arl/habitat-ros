@@ -734,7 +734,7 @@ class HabitatROSNode(Node):
         # Receive the latest pose.
         self.T_HB_mutex.acquire()
         T_HB = np.copy(self.T_HB)
-        stamp = Time(nanoseconds=self.T_HB_stamp.nanoseconds)
+        stamp = self.T_HB_stamp
         T_HB_received = self.T_HB_received
         self.T_HB_received = False
         self.T_HB_mutex.release()
