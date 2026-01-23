@@ -17,7 +17,7 @@ Python3.
 
 ``` bash
 sudo apt-get install -y --no-install-recommends libjpeg-dev libglm-dev \
-    libgl1 libglx-mesa0 libegl1 mesa-utils xorg-dev freeglut3-dev 
+    libgl1 libglx-mesa0 libegl1 mesa-utils xorg-dev freeglut3-dev
 ```
 
 ### Build package

@@ -40,11 +40,10 @@ from typing import Tuple
 
 import numpy as np
 import quaternion
-
 import rclpy
-from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
+from rclpy.node import Node
 
 _node_name = "teleop"
 _pose_input_topic = "pose"
@@ -103,7 +102,7 @@ class TeleopNode(Node):
 
         # Pose storage
         self.pose_msg = None
-        
+
         self.get_logger().info("Teleop node initialized. Waiting for initial pose...")
 
         # Subscribe once to get the initial pose
@@ -117,9 +116,7 @@ class TeleopNode(Node):
         def callback(msg):
             self.pose_msg = msg
 
-        sub = self.create_subscription(
-            PoseStamped, _pose_input_topic, callback, 10
-        )
+        sub = self.create_subscription(PoseStamped, _pose_input_topic, callback, 10)
 
         while rclpy.ok() and self.pose_msg is None:
             rclpy.spin_once(self, timeout_sec=0.1)
@@ -169,9 +166,15 @@ class TeleopNode(Node):
         T_BBnew[1, 3] += m.y()
         T_BBnew[2, 3] += m.z()
 
-        q_yaw = quaternion.quaternion(math.cos(m.yaw() / 2), 0, 0, math.sin(m.yaw() / 2))
-        q_pitch = quaternion.quaternion(math.cos(m.pitch() / 2), 0, math.sin(m.pitch() / 2), 0)
-        q_roll = quaternion.quaternion(math.cos(m.roll() / 2), math.sin(m.roll() / 2), 0, 0)
+        q_yaw = quaternion.quaternion(
+            math.cos(m.yaw() / 2), 0, 0, math.sin(m.yaw() / 2)
+        )
+        q_pitch = quaternion.quaternion(
+            math.cos(m.pitch() / 2), 0, math.sin(m.pitch() / 2), 0
+        )
+        q_roll = quaternion.quaternion(
+            math.cos(m.roll() / 2), math.sin(m.roll() / 2), 0, 0
+        )
         q_new = q_yaw * q_pitch * q_roll
         T_BBnew[0:3, 0:3] = quaternion.as_rotation_matrix(q_new)
 
@@ -278,7 +281,9 @@ class TeleopNode(Node):
         window.addstr(1, 0, "  " + " ".join(["{: 8.3f}".format(x) for x in position]))
         window.move(3, 0)
         window.clrtoeol()
-        window.addstr(3, 0, "  " + " ".join(["{: 8.3f}".format(x) for x in orientation]))
+        window.addstr(
+            3, 0, "  " + " ".join(["{: 8.3f}".format(x) for x in orientation])
+        )
 
     def run(self):
         window = curses.initscr()

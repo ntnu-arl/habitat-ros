@@ -32,8 +32,6 @@
 
 import logging
 
-import logging
-
 LoggerInfo = logging.getLogger("habitat_ros_info")
 LoggerWarn = logging.getLogger("habitat_ros_warn")
 LoggerError = logging.getLogger("habitat_ros_error")
