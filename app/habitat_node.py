@@ -273,28 +273,28 @@ class HabitatROSNode:
         ]
     )
 
+    # The default node options
+    _default_config = {
+        "width": 640,
+        "height": 480,
+        "near_plane": 0.1,
+        "far_plane": 10.0,
+        "f": 525.0,
+        "fps": 30,
+        "enable_semantics": False,
+        "depth_noise": False,
+        "allowed_classes": [],
+        "scene_file": "",
+        "initial_T_HB": [],
+        "pose_frame_id": "habitat",
+        "pose_frame_at_initial_T_HB": False,
+        "visualize_semantics": False,
+        "recording_dir": "",
+    }
+
     def __init__(self):
         # Initialize the node, habitat-sim and publishers
         rospy.init_node("habitat")
-        self._ns = rospy.get_namespace()
-        # The default node options
-        self._default_config = {
-            "width": 640,
-            "height": 480,
-            "near_plane": 0.1,
-            "far_plane": 10.0,
-            "f": 525.0,
-            "fps": 30,
-            "enable_semantics": False,
-            "depth_noise": False,
-            "allowed_classes": [],
-            "scene_file": "",
-            "initial_T_HB": [],
-            "pose_frame_id": self._ns.strip("/"),
-            "pose_frame_at_initial_T_HB": False,
-            "visualize_semantics": False,
-            "recording_dir": "",
-        }
         self.config = self._read_node_config()
         self.sim = self._init_habitat(self.config)
         self.pub = self._init_publishers(self.config)
@@ -307,14 +307,10 @@ class HabitatROSNode:
         # initial pose
         if (
             self.config["pose_frame_at_initial_T_HB"]
-            and self.config["pose_frame_id"] != self._default_config["pose_frame_id"]
+            and self.config["pose_frame_id"] != "habitat"
         ):
             T_HP = self.T_HB
-            T_HP_msg = transform_to_msg(
-                T_HP,
-                self._default_config["pose_frame_id"],
-                self.config["pose_frame_id"],
-            )
+            T_HP_msg = transform_to_msg(T_HP, "habitat", self.config["pose_frame_id"])
             self.tf_static_broadcaster = tf2_ros.StaticTransformBroadcaster()
             self.tf_static_broadcaster.sendTransform(T_HP_msg)
             # Wait for the listener to pick up the transform
@@ -556,9 +552,7 @@ class HabitatROSNode:
         """Callback for receiving external pose messages. It updates the agent
         pose."""
         # Find the transform from the pose frame F to the habitat frame H
-        T_HE = find_tf(
-            self.tf_buffer, self._default_config["pose_frame_id"], pose.header.frame_id
-        )
+        T_HE = find_tf(self.tf_buffer, "habitat", pose.header.frame_id)
         # Transform the pose
         T_EB = msg_to_pose(pose.pose)
         T_HB = T_HE @ T_EB
@@ -592,11 +586,7 @@ class HabitatROSNode:
     def _pose_to_msg(self, observation: Observation) -> PoseStamped:
         """Convert the agent pose from the observation to a ROS PoseStamped
         message."""
-        T_PH = find_tf(
-            self.tf_buffer,
-            self.config["pose_frame_id"],
-            self._default_config["pose_frame_id"],
-        )
+        T_PH = find_tf(self.tf_buffer, self.config["pose_frame_id"], "habitat")
         t_PB, q_PB = split_pose(T_PH @ observation["T_HB"])
         p = PoseStamped()
         p.header.frame_id = self.config["pose_frame_id"]
@@ -760,11 +750,7 @@ class HabitatROSNode:
                 f.write("# ground truth trajectory\n")
                 f.write("# timestamp tx ty tz qx qy qz qw\n")
         with open(groundtruth_txt, "a") as f:
-            T_PH = find_tf(
-                self.tf_buffer,
-                self.config["pose_frame_id"],
-                self._default_config["pose_frame_id"],
-            )
+            T_PH = find_tf(self.tf_buffer, self.config["pose_frame_id"], "habitat")
             t_PC, q_PC = split_pose(T_PH @ obs["T_HB"] @ self._T_BCtum)
             f.write(
                 "{} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n".format(
