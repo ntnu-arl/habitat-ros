@@ -20,8 +20,6 @@ sudo apt-get install -y --no-install-recommends libjpeg-dev libglm-dev \
     libgl1-mesa-glx libegl1-mesa-dev mesa-utils xorg-dev freeglut3-dev \
     python3-pip python3-attr python3-numba python3-numpy python3-pil \
     python3-scipy python3-tqdm python3-matplotlib python3-git
-python3 -
-pip3 install --user numpy-quaternion
 ```
 
 ### Build package
