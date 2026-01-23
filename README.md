@@ -2,8 +2,7 @@
 
 A ROS2 wrapper for
 [Habitat-Sim](https://github.com/facebookresearch/habitat-sim). It allows
-getting RGB, depth and semantic renders from ROS. It also contains a simplified
-MAV simulator.
+getting RGB, depth and semantic renders to ROS2.
 
 
 
