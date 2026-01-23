@@ -43,13 +43,12 @@ catkin build -DCMAKE_BUILD_TYPE=Release
 cd  habitat_ws/src/
 python3.8 -m venv --system-site-packages habitat_env
 source habitat_env/bin/activate
-pip install numpy-quaternion
-
-
-``` 
-
-
-
+git submodule update --init --recursive
+pip install -r requirements.txt
+cd habitat_env
+git checkout v0.2.0
+python3 setup.py install --headless --with-cuda --cmake-args="-DUSE_SYSTEM_ASSIMP=ON"
+```
 
 
 ## Dataset download
@@ -146,4 +145,3 @@ Copyright © 2020-2021 Smart Robotics Lab, Imperial College London
 Copyright © 2020-2021 Sotiris Papatheodorou
 
 Distributed under the BSD 3-Clause license.
-

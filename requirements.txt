@@ -1,0 +1,11 @@
+attrs>=19.1.0
+gitpython
+imageio
+imageio-ffmpeg
+matplotlib
+numba>=0.56,<0.60
+numpy>=1.20,<2.0
+numpy-quaternion
+pillow==10.4.0
+scipy>=1.7,<2.0
+tqdm

@@ -29,10 +29,8 @@
 #
 """Catkin setup for semantic_inference_ros."""
 
-from setuptools import setup
 from catkin_pkg.python_setup import generate_distutils_setup
+from setuptools import setup
 
-setup_args = generate_distutils_setup(
-    packages=["habitat_ros"], package_dir={"": "src"}
-)
+setup_args = generate_distutils_setup(packages=["habitat_ros"], package_dir={"": "src"})
 setup(**setup_args)

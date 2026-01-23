@@ -18,4 +18,3 @@ trim_trailing_whitespace = true
 
 [*.{launch,xml}]
 indent_size = 2
-
