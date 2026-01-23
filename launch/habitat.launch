@@ -13,6 +13,7 @@
   <node pkg="habitat_ros"
       type="habitat_node.py"
       name="habitat_node"
+      ns="habitat"
       clear_params="true"
       output="screen"
       launch-prefix="$(arg python_env)">
