@@ -20,10 +20,8 @@ sudo apt-get install -y --no-install-recommends libjpeg-dev libglm-dev \
     libgl1-mesa-glx libegl1-mesa-dev mesa-utils xorg-dev freeglut3-dev \
     python3-pip python3-attr python3-numba python3-numpy python3-pil \
     python3-scipy python3-tqdm python3-matplotlib python3-git
+python3 -
 pip3 install --user numpy-quaternion
-# The habitat-sim install script calls pip expecting pip3. The following command
-# will fail if /usr/local/bin/pip exists.
-sudo ln --symbolic /usr/bin/pip3 /usr/local/bin/pip
 ```
 
 ### Build package
@@ -33,12 +31,24 @@ the repository and build. This will build Habitat-Sim which will take some time
 and require a lot of RAM and CPU time.
 
 ``` bash
-mkdir -p ~/catkin_ws/src/ && cd ~/catkin_ws/src/
-source /opt/ros/noetic/setup.bash
+mkdir -p habitat_ws/src/ && cd habitat_ws/src/
 catkin init
-git clone https://bitbucket.org/smartroboticslab/habitat-ros.git
-catkin build -DCMAKE_BUILD_TYPE=Release habitat_ros
+git clone git@github.com:ntnu-arl/habitat-ros.git
+catkin build -DCMAKE_BUILD_TYPE=Release
 ```
+
+### Python Virtual Environment
+
+``` bash
+cd  habitat_ws/src/
+python3.8 -m venv --system-site-packages habitat_env
+source habitat_env/bin/activate
+pip install numpy-quaternion
+
+
+``` 
+
+
 
 
 
