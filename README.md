@@ -24,9 +24,8 @@ the repository and build.
 
 ``` bash
 mkdir -p habitat_ws/src/ && cd habitat_ws/src/
-catkin init
 git clone git@github.com:ntnu-arl/habitat-ros.git
-catkin build -DCMAKE_BUILD_TYPE=Release
+colcon build --symlink-install
 ```
 
 ### Python Virtual Environment
