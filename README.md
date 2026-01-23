@@ -1,6 +1,6 @@
 # Habitat-ROS
 
-A ROS wrapper for
+A ROS2 wrapper for
 [Habitat-Sim](https://github.com/facebookresearch/habitat-sim). It allows
 getting RGB, depth and semantic renders from ROS. It also contains a simplified
 MAV simulator.
@@ -11,9 +11,7 @@ MAV simulator.
 
 ### Install dependencies
 
-Only tested on Ubuntu 20.04 and ROS Noetic. Older versions of ROS use Python2
-which will complicate things when trying to use Habitat which is written on
-Python3.
+Tested on Ubuntu 24.04 and ROS2 Jazzy.
 
 ``` bash
 sudo apt-get install -y --no-install-recommends libjpeg-dev libglm-dev \
@@ -22,9 +20,8 @@ sudo apt-get install -y --no-install-recommends libjpeg-dev libglm-dev \
 
 ### Build package
 
-This is a normal ROS package so all you have to do is create a workspace, clone
-the repository and build. This will build Habitat-Sim which will take some time
-and require a lot of RAM and CPU time.
+This is a normal ROS2 package so all you have to do is create a workspace, clone
+the repository and build.
 
 ``` bash
 mkdir -p habitat_ws/src/ && cd habitat_ws/src/
@@ -36,12 +33,8 @@ catkin build -DCMAKE_BUILD_TYPE=Release
 ### Python Virtual Environment
 
 ``` bash
-cd  habitat_ws/src/
+cd  habitat_ws/src/habitat_ros
 git submodule update --init --recursive
-git checkout v0.3,3
-sudo add-apt-repository -y ppa:deadsnakes/ppa
-sudo apt update
-sudo apt install -y python3.10 python3.10-dev python3.10-venv
 python3 -m venv --system-site-packages habitat_env
 source habitat_env/bin/activate
 pip install -r requirements.txt
@@ -145,5 +138,7 @@ immediately moved there.
 Copyright © 2020-2021 Smart Robotics Lab, Imperial College London
 
 Copyright © 2020-2021 Sotiris Papatheodorou
+
+Copyright © 2025-2026 NTNU Autonomous Robots Lab
 
 Distributed under the BSD 3-Clause license.
