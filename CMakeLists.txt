@@ -1,21 +1,16 @@
 cmake_minimum_required(VERSION 3.16)
-
 project(habitat_ros)
 
-find_package(catkin REQUIRED COMPONENTS
-    geometry_msgs
-    nav_msgs
-    sensor_msgs
-    std_msgs
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+
+install(PROGRAMS app/habitat_node.py
+                 app/teleop.py
+        DESTINATION lib/${PROJECT_NAME}
 )
 
-catkin_python_setup()
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 
-catkin_package(
-    CATKIN_DEPENDS
-        geometry_msgs
-        message_runtime
-        nav_msgs
-        sensor_msgs
-        std_msgs
-)
+ament_python_install_package(${PROJECT_NAME})
+ament_package()

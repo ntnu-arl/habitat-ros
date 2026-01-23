@@ -1,19 +1,17 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>habitat_ros</name>
-  <version>0.1.0</version>
-  <description>A ROS interface to Habitat-Sim</description>
-  <author>Sotiris Papatheodorou</author>
-  <maintainer email="s.papatheodorou18@imperial.ac.uk">Sotiris Papatheodorou</maintainer>
-  <license>BSD-3-Clause</license>
+  <version>0.3.0</version>
+  <description>A ROS2 interface to Habitat-Sim</description>
+  <maintainer email="albert.g.puigjaner@ntnu.no">Albert Gassol Puigjaner</maintainer>
+  <license>BSD3</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
 
-  <depend>geometry_msgs</depend>
-  <depend>nav_msgs</depend>
-  <depend>sensor_msgs</depend>
-  <depend>std_msgs</depend>
-
-  <exec_depend>message_runtime</exec_depend>
-  <exec_depend>rospy</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

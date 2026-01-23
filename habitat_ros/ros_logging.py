@@ -28,10 +28,43 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-"""Catkin setup for semantic_inference_ros."""
+"""Module containing ROS logging shim."""
 
-from catkin_pkg.python_setup import generate_distutils_setup
-from setuptools import setup
+import logging
 
-setup_args = generate_distutils_setup(packages=["habitat_ros"], package_dir={"": "src"})
-setup(**setup_args)
+import logging
+
+LoggerInfo = logging.getLogger("habitat_ros_info")
+LoggerWarn = logging.getLogger("habitat_ros_warn")
+LoggerError = logging.getLogger("habitat_ros_error")
+
+
+# adapted from https://gist.github.com/ablakey/4f57dca4ea75ed29c49ff00edf622b38
+class RosForwarder(logging.Handler):
+    """Class to forward logging to ros handler."""
+
+    def __init__(self, node, **kwargs):
+        """Construct a logging Handler that forwards log messages to ROS."""
+        super().__init__(**kwargs)
+        self._level_map = {
+            logging.DEBUG: node.get_logger().debug,
+            logging.INFO: node.get_logger().info,
+            logging.WARNING: node.get_logger().warning,
+            logging.ERROR: node.get_logger().error,
+            logging.CRITICAL: node.get_logger().fatal,
+        }
+
+    def emit(self, record):
+        """Send message to ROS."""
+        lno = record.levelno if record.levelno in self._level_map else logging.CRITICAL
+        self._level_map[lno](f"{record.name}: {record.msg}")
+
+
+def setup_ros_log_forwarding(node, level=logging.INFO):
+    """Forward logging to ROS."""
+    LoggerInfo.addHandler(RosForwarder(node))
+    LoggerInfo.setLevel(logging.INFO)
+    LoggerWarn.addHandler(RosForwarder(node))
+    LoggerWarn.setLevel(logging.WARNING)
+    LoggerError.addHandler(RosForwarder(node))
+    LoggerError.setLevel(logging.ERROR)

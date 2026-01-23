@@ -3,9 +3,10 @@ gitpython
 imageio
 imageio-ffmpeg
 matplotlib
-numba>=0.56,<0.60
-numpy>=1.20,<2.0
+numba
+numpy==1.26.4
 numpy-quaternion
 pillow==10.4.0
-scipy>=1.7,<2.0
+scipy>=1.10.1
 tqdm
+coverage==7.13.1

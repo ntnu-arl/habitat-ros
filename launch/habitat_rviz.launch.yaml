@@ -1,0 +1,39 @@
+---
+launch:
+
+  # Launch the teleoperation node?
+  - arg:
+      name: teleop
+      default: "false"
+  - arg: {name: rviz_path, default: $(find-pkg-share habitat_ros)/config/habitat.rviz, description: rviz file to load}
+
+  # Remap only if teleop is enabled
+  - set_remap:
+      from: /habitat/external_pose
+      to: /teleop/command
+      if: "$(var teleop)"
+
+  # Include the main habitat launch file (pass all args)
+  - include:
+      file: "$(find-pkg-share habitat_ros)/launch/habitat.launch.yaml"
+
+  # Group that only runs if teleop is enabled
+  - group:
+    
+    # Remap teleop pose back into habitat
+    - set_remap:
+        from: /teleop/pose
+        to: /habitat/pose
+        if: "$(var teleop)"
+    # Include teleop launch with publish_path=false
+    - include:
+        file: "$(find-pkg-share habitat_ros)/launch/teleop.launch.yaml"
+        if: "$(var teleop)"
+
+  # RViz (ROS 2 uses rviz2)
+  - node:
+      pkg: rviz2
+      exec: rviz2
+      name: rviz
+      output: screen
+      args: -d $(var rviz_path)

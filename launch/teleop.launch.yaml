@@ -1,0 +1,21 @@
+---
+launch:
+
+  - arg:
+      name: publish_path
+      default: "true"
+  - arg:
+      name: python_env
+      default: "/developer/ros2_hydra_ws/src/habitat-ros/habitat_env/bin/python"
+
+  - node:
+      pkg: habitat_ros
+      exec: teleop.py
+      name: teleop_node
+      namespace: teleop
+      on_exit: shutdown
+      launch-prefix: $(var python_env)
+      output: screen
+      param:
+        - name: publish_path
+          value: $(var publish_path)

@@ -28,10 +28,6 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-"""Catkin setup for semantic_inference_ros."""
+"""ROS utilities for habitat_ros."""
 
-from catkin_pkg.python_setup import generate_distutils_setup
-from setuptools import setup
-
-setup_args = generate_distutils_setup(packages=["habitat_ros"], package_dir={"": "src"})
-setup(**setup_args)
+from habitat_ros.ros_logging import LoggerError, LoggerInfo, LoggerWarn, setup_ros_log_forwarding  # NOQA

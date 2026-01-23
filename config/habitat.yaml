@@ -3,30 +3,29 @@
 # SPDX-FileCopyrightText: 2020-2021 Sotiris Papatheodorou
 # SPDX-License-Identifier: CC0-1.0
 # Habitat-ROS node settings
-habitat:
-    # Sensor settings
-  width: 640
-  height: 480
-  near_plane: 0.1
-  far_plane: 20.0
-  f: 525.0
-  fps: 30
-  enable_semantics: false
-  depth_noise: false
-  allowed_classes: []
+# Sensor settings
+width: 640
+height: 480
+near_plane: 0.1
+far_plane: 20.0
+f: 525.0
+fps: 30
+enable_semantics: false
+depth_noise: false
+allowed_classes: []
 
-    # Scene settings
-  scene_file: /media/albert/ARLAlbert/scene_graphs_datasets/hm3d/val/00800-TEEsavR23oF/TEEsavR23oF.glb
-    # scene_file: "~/Documents/Datasets/Matterport3D/v1/tasks/mp3d_habitat/mp3d/1LXtFkjw3qL/1LXtFkjw3qL.glb"
-    # scene_file: "~/Documents/Datasets/Matterport3D/v1/tasks/mp3d_habitat/mp3d/2t7WUuJeko7/2t7WUuJeko7.glb"
-    # scene_file: "~/Documents/Datasets/Replica/office_0/habitat/mesh_semantic.ply"
-    # scene_file: "~/Documents/Datasets/Replica/room_0/habitat/mesh_semantic.ply"
-  initial_T_HB: []
-  pose_frame_id: habitat
-  pose_frame_at_initial_T_HB: false
+  # Scene settings
+scene_file: /developer/ros2_hydra_ws/00800-TEEsavR23oF/TEEsavR23oF.glb
+  # scene_file: "~/Documents/Datasets/Matterport3D/v1/tasks/mp3d_habitat/mp3d/1LXtFkjw3qL/1LXtFkjw3qL.glb"
+  # scene_file: "~/Documents/Datasets/Matterport3D/v1/tasks/mp3d_habitat/mp3d/2t7WUuJeko7/2t7WUuJeko7.glb"
+  # scene_file: "~/Documents/Datasets/Replica/office_0/habitat/mesh_semantic.ply"
+  # scene_file: "~/Documents/Datasets/Replica/room_0/habitat/mesh_semantic.ply"
+initial_T_HB: []
+pose_frame_id: habitat
+pose_frame_at_initial_T_HB: false
 
-    # Visualization settings
-  visualize_semantics: false
+  # Visualization settings
+visualize_semantics: false
 
-    # Recording settings
-  recording_dir: ''
+  # Recording settings
+recording_dir: ''

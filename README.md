@@ -17,9 +17,7 @@ Python3.
 
 ``` bash
 sudo apt-get install -y --no-install-recommends libjpeg-dev libglm-dev \
-    libgl1-mesa-glx libegl1-mesa-dev mesa-utils xorg-dev freeglut3-dev \
-    python3-pip python3-attr python3-numba python3-numpy python3-pil \
-    python3-scipy python3-tqdm python3-matplotlib python3-git
+    libgl1 libglx-mesa0 libegl1 mesa-utils xorg-dev freeglut3-dev 
 ```
 
 ### Build package
@@ -39,13 +37,19 @@ catkin build -DCMAKE_BUILD_TYPE=Release
 
 ``` bash
 cd  habitat_ws/src/
-python3.8 -m venv --system-site-packages habitat_env
-source habitat_env/bin/activate
 git submodule update --init --recursive
+git checkout v0.3,3
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install -y python3.10 python3.10-dev python3.10-venv
+python3 -m venv --system-site-packages habitat_env
+source habitat_env/bin/activate
 pip install -r requirements.txt
-cd habitat_env
-git checkout v0.2.0
-python3 setup.py install --headless --with-cuda --cmake-args="-DUSE_SYSTEM_ASSIMP=ON"
+sudo apt install -y g++-11 gcc-11
+export CC=gcc-11
+export CXX=g++-11
+cd habitat_sim
+python setup.py install --headless --with-cuda --cmake-args="-DUSE_SYSTEM_ASSIMP=ON"
 ```
 
 

@@ -1,0 +1,21 @@
+launch:
+
+  - arg:
+      name: habitat_config
+      default: "$(find-pkg-share habitat_ros)/config/habitat.yaml"
+
+  - arg:
+      name: python_env
+      default: "/developer/ros2_hydra_ws/src/habitat-ros/habitat_env/bin/python"
+
+  - node:
+      pkg: habitat_ros
+      exec: habitat_node.py
+      name: habitat_node
+      namespace: habitat
+      on_exit: shutdown
+      launch-prefix: $(var python_env)
+      output: screen
+      param:
+        - name: config_path
+          value: $(var habitat_config)
