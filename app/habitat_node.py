@@ -281,6 +281,15 @@ class HabitatROSNode(Node):
         ]
     )
 
+    _T_RC = np.array(
+        [
+            (0.0, 0.0, 1.0, 0.0),
+            (-1.0, 0.0, 0.0, 0.0),
+            (0.0, -1.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+        ]
+    )
+
     # The default node options
     _default_config = {
         "width": 640,
@@ -298,6 +307,9 @@ class HabitatROSNode(Node):
         "pose_frame_at_initial_T_HB": False,
         "visualize_semantics": False,
         "recording_dir": "",
+        "world_frame": "world",
+        "robot_frame": "base_link",
+        "sensor_frame": "camera_link",
     }
 
     def __init__(self):
@@ -323,6 +335,29 @@ class HabitatROSNode(Node):
         # TF buffer and listener
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+
+        # TF broadcaster
+        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
+
+        # Static TF: robot_frame -> camera_link
+        self.tf_static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
+
+        # Robot to camera static transform
+        msg = self._transform_to_msg(
+            self._T_RC,
+            self.config["robot_frame"],  # parent
+            self.config["sensor_frame"],  # child
+        )
+        self.tf_static_broadcaster.sendTransform(msg)
+
+        # Habitat to world static transform
+        if self.config["world_frame"] != "habitat":
+            msg = self._transform_to_msg(
+                np.eye(4),
+                "habitat",
+                self.config["world_frame"],
+            )
+            self.tf_static_broadcaster.sendTransform(msg)
 
         # Pose frame static broadcaster if needed
         if (
@@ -396,6 +431,24 @@ class HabitatROSNode(Node):
         self.get_logger().info("Habitat node parameters:")
         print_config(config)
         return config
+
+    def _broadcast_tf(self, T_HB: np.array) -> None:
+        msg = TransformStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.config["world_frame"]  # e.g. "habitat"
+        msg.child_frame_id = self.config["robot_frame"]  # "base_link"
+
+        msg.transform.translation.x = float(T_HB[0, 3])
+        msg.transform.translation.y = float(T_HB[1, 3])
+        msg.transform.translation.z = float(T_HB[2, 3])
+
+        q = quaternion.from_rotation_matrix(T_HB[0:3, 0:3]).normalized()
+        msg.transform.rotation.x = float(q.x)
+        msg.transform.rotation.y = float(q.y)
+        msg.transform.rotation.z = float(q.z)
+        msg.transform.rotation.w = float(q.w)
+
+        self.tf_broadcaster.sendTransform(msg)
 
     def _transform_to_msg(
         self, T_TF: np.array, from_frame: str, to_frame: str
@@ -776,6 +829,9 @@ class HabitatROSNode(Node):
         self, obs: Observation, pub: Publishers, config: Config
     ) -> None:
         """Publish the sensor observations and ground truth pose."""
+        # Broadcast dynamic TF world -> robot
+        self._broadcast_tf(obs["T_HB"])
+        # Publish messages
         pub["pose"].publish(self._pose_to_msg(obs))
         pub["rgb"].publish(self._rgb_to_msg(obs))
         pub["depth"].publish(self._depth_to_msg(obs))
