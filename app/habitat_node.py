@@ -51,7 +51,6 @@ from geometry_msgs.msg import Pose, PoseStamped, Transform, TransformStamped
 from magnum import Vector3
 from rclpy.duration import Duration
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
 
@@ -641,15 +640,9 @@ class HabitatROSNode(Node):
         if config["enable_semantics"] and config["instance_to_class"].size > 0:
             image_topics += [self._sem_class_topic_name, self._sem_instance_topic_name]
         for topic in image_topics:
-            qos = QoSProfile(
-                depth=1,
-                reliability=ReliabilityPolicy.RELIABLE,
-                durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            )
             pub[topic + "_camera_info"] = self.create_publisher(
-                CameraInfo, topic + "camera_info", qos
+                CameraInfo, topic + "camera_info", image_queue_size
             )
-            pub[topic + "_camera_info"].publish(self._camera_intrinsics_to_msg(config))
 
         return pub
 
@@ -706,10 +699,28 @@ class HabitatROSNode(Node):
         p.pose.orientation.w = q_PB.w
         return p
 
+    def _camera_intrinsics_to_msg(
+        self, config: Config, observation: Observation
+    ) -> CameraInfo:
+        """Return a ROS message containing the Habitat-Sim camera intrinsic
+        parameters."""
+        msg = CameraInfo()
+        msg.width = config["width"]
+        msg.height = config["height"]
+        msg.k = config["K"].flatten().tolist()
+        msg.p = config["P"].flatten().tolist()
+        msg.distortion_model = "plumb_bob"
+        msg.d = [0.0, 0.0, 0.0, 0.0, 0.0]
+        msg.header.frame_id = self.config["sensor_frame"]
+        msg.header.stamp = observation["timestamp"]
+
+        return msg
+
     def _rgb_to_msg(self, observation: Observation) -> Image:
         """Convert the RGB image from the observation to a ROS Image message."""
         msg = self._bridge.cv2_to_imgmsg(observation["rgb"], "rgb8")
         msg.header.stamp = observation["timestamp"]
+        msg.header.frame_id = self.config["sensor_frame"]
         return msg
 
     def _depth_to_msg(self, observation: Observation) -> Image:
@@ -717,6 +728,7 @@ class HabitatROSNode(Node):
         message."""
         msg = self._bridge.cv2_to_imgmsg(observation["depth"], "32FC1")
         msg.header.stamp = observation["timestamp"]
+        msg.header.frame_id = self.config["sensor_frame"]
         return msg
 
     def _sem_instances_to_msg(self, observation: Observation) -> Image:
@@ -737,6 +749,7 @@ class HabitatROSNode(Node):
             observation["sem_classes"].astype(np.uint8), "8UC1"
         )
         msg.header.stamp = observation["timestamp"]
+        msg.header.frame_id = self.config["sensor_frame"]
         return msg
 
     def _render_sem_instances_to_msg(self, observation: Observation) -> Image:
@@ -748,6 +761,7 @@ class HabitatROSNode(Node):
         color_img = color_img / 2 + observation["rgb"] / 2
         msg = self._bridge.cv2_to_imgmsg(color_img.astype(np.uint8), "rgb8")
         msg.header.stamp = observation["timestamp"]
+        msg.header.frame_id = self.config["sensor_frame"]
         return msg
 
     def _render_sem_classes_to_msg(self, observation: Observation) -> Image:
@@ -759,18 +773,7 @@ class HabitatROSNode(Node):
         color_img = color_img / 2 + observation["rgb"] / 2
         msg = self._bridge.cv2_to_imgmsg(color_img.astype(np.uint8), "rgb8")
         msg.header.stamp = observation["timestamp"]
-        return msg
-
-    def _camera_intrinsics_to_msg(self, config: Config) -> CameraInfo:
-        """Return a ROS message containing the Habitat-Sim camera intrinsic
-        parameters."""
-        msg = CameraInfo()
-        msg.width = config["width"]
-        msg.height = config["height"]
-        msg.k = config["K"].flatten().tolist()
-        msg.p = config["P"].flatten().tolist()
-        msg.distortion_model = "plumb_bob"
-        msg.d = [0.0, 0.0, 0.0, 0.0, 0.0]
+        msg.header.frame_id = self.config["sensor_frame"]
         return msg
 
     def _T_IC_to_T_HB(self, T_IC: np.array) -> np.array:
@@ -835,6 +838,13 @@ class HabitatROSNode(Node):
         pub["pose"].publish(self._pose_to_msg(obs))
         pub["rgb"].publish(self._rgb_to_msg(obs))
         pub["depth"].publish(self._depth_to_msg(obs))
+        pub[self._rgb_topic_name + "_camera_info"].publish(
+            self._camera_intrinsics_to_msg(config, obs)
+        )
+        pub[self._depth_topic_name + "_camera_info"].publish(
+            self._camera_intrinsics_to_msg(config, obs)
+        )
+
         if config["enable_semantics"] and config["instance_to_class"].size > 0:
             if config["allowed_classes"]:
                 self._filter_sem_classes(obs)
