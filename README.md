@@ -60,8 +60,20 @@ python3 download_mp.py --task habitat -o /path/to/download/
 
 ### habitat\_node.py
 
-This is the main node and its respective launch file is
-`launch/habitat.launch`.
+This is the main node, to launch it run:
+```bash
+ros2 launch habitat_ros habitat.launch.yaml
+```
+or
+```bash
+ros2 launch habitat_ros habitat_rviz.launch.yaml
+```
+to enable visualization
+
+You can control the pose with the keyboard by running:
+```bash
+ros2 run habitat_ros teleop.py
+```
 
 #### Coordinate Frames
 

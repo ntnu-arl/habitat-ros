@@ -46,8 +46,8 @@ from nav_msgs.msg import Path
 from rclpy.node import Node
 
 _node_name = "teleop"
-_pose_input_topic = "pose"
-_output_topic = "command"
+_pose_input_topic = "/habitat/pose"
+_output_topic = "/habitat/external_pose"
 
 
 class Movement:
@@ -90,7 +90,7 @@ class TeleopNode(Node):
         super().__init__(_node_name)
 
         # ROS2 parameter
-        self.declare_parameter("publish_path", True)
+        self.declare_parameter("publish_path", False)
         publish_path = self.get_parameter("publish_path").value
         self.publish_path = publish_path
 
@@ -201,51 +201,57 @@ class TeleopNode(Node):
     def wait_for_key(self, window) -> Tuple[Movement, bool]:
         m = Movement()
         quit = False
-        try:
-            while True:
+
+        while True:
+            try:
                 key = window.getkey()
-                if key == "Q":
-                    quit = True
-                    break
-                elif key == "w":
-                    m = Movement(x=1)
-                    break
-                elif key == "s":
-                    m = Movement(x=-1)
-                    break
-                elif key == "a":
-                    m = Movement(y=1)
-                    break
-                elif key == "d":
-                    m = Movement(y=-1)
-                    break
-                elif key == " ":
-                    m = Movement(z=1)
-                    break
-                elif key == "c":
-                    m = Movement(z=-1)
-                    break
-                elif key == "q":
-                    m = Movement(yaw=1)
-                    break
-                elif key == "e":
-                    m = Movement(yaw=-1)
-                    break
-                elif key == "f":
-                    m = Movement(pitch=1)
-                    break
-                elif key == "r":
-                    m = Movement(pitch=-1)
-                    break
-                elif key == "x":
-                    m = Movement(roll=1)
-                    break
-                elif key == "z":
-                    m = Movement(roll=-1)
-                    break
-                time.sleep(0.05)
-        finally:
-            curses.endwin()
+            except KeyboardInterrupt:
+                # Let outer loop handle shutdown
+                quit = True
+                break
+
+            if key == "Q":
+                quit = True
+                break
+            elif key == "w":
+                m = Movement(x=1)
+                break
+            elif key == "s":
+                m = Movement(x=-1)
+                break
+            elif key == "a":
+                m = Movement(y=1)
+                break
+            elif key == "d":
+                m = Movement(y=-1)
+                break
+            elif key == " ":
+                m = Movement(z=1)
+                break
+            elif key == "c":
+                m = Movement(z=-1)
+                break
+            elif key == "q":
+                m = Movement(yaw=1)
+                break
+            elif key == "e":
+                m = Movement(yaw=-1)
+                break
+            elif key == "f":
+                m = Movement(pitch=1)
+                break
+            elif key == "r":
+                m = Movement(pitch=-1)
+                break
+            elif key == "x":
+                m = Movement(roll=1)
+                break
+            elif key == "z":
+                m = Movement(roll=-1)
+                break
+
+            time.sleep(0.05)
+
         return m, quit
 
     def print_waiting_for_pose(self, window):
@@ -286,9 +292,16 @@ class TeleopNode(Node):
         )
 
     def run(self):
-        window = curses.initscr()
+        window = None
+        curses_active = False
         try:
+            window = curses.initscr()
+            curses_active = True
+
             curses.noecho()
+            curses.cbreak()
+            window.keypad(True)
+
             self.print_waiting_for_pose(window)
             pose = self.pose_msg
             quit = False
@@ -297,14 +310,31 @@ class TeleopNode(Node):
             while rclpy.ok() and not quit:
                 self.print_pose_stamped(pose, window)
                 movement, quit = self.wait_for_key(window)
+
+                if quit:
+                    break
+
                 new_pose = self.update_pose(pose, movement)
                 if self.publish_path:
                     self.pub.publish(self.pose_to_path(pose, new_pose))
                 else:
                     self.pub.publish(new_pose)
                 pose = new_pose
+
+        except KeyboardInterrupt:
+            # Clean exit on Ctrl-C
+            pass
+
         finally:
-            curses.endwin()
+            if curses_active:
+                try:
+                    curses.nocbreak()
+                    window.keypad(False)
+                    curses.echo()
+                    curses.endwin()
+                except curses.error:
+                    # Already closed by signal handler – ignore
+                    pass
 
 
 def main():
@@ -312,9 +342,12 @@ def main():
     node = TeleopNode()
     try:
         node.run()
+    except KeyboardInterrupt:
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

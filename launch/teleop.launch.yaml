@@ -5,7 +5,7 @@ launch:
       default: 'true'
   - arg:
       name: python_env
-      default: /developer/ros2_hydra_ws/src/habitat-ros/habitat_env/bin/python
+      default: /developer/habitat_env/bin/python
   - node:
       pkg: habitat_ros
       exec: teleop.py
@@ -14,6 +14,7 @@ launch:
       on_exit: shutdown
       launch-prefix: $(var python_env)
       output: screen
+      emulate_tty: true
       param:
         - name: publish_path
           value: $(var publish_path)
