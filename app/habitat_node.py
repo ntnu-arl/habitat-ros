@@ -318,9 +318,12 @@ class HabitatROSNode(Node):
         config_path = (
             self.declare_parameter("config_path", "").get_parameter_value().string_value
         )
+        scene_file = (
+            self.declare_parameter("scene_file", "").get_parameter_value().string_value
+        )
         config_path = pathlib.Path(config_path).expanduser().absolute()
         # Read config
-        self.config = self._read_node_config(config_path)
+        self.config = self._read_node_config(config_path, scene_file)
 
         # Init Habitat simulator
         self.sim = self._init_habitat(self.config)
@@ -389,12 +392,13 @@ class HabitatROSNode(Node):
         if self.config["recording_dir"]:
             self._record_observation(observation, self.config["recording_dir"])
 
-    def _read_node_config(self, config_path: pathlib.Path) -> Config:
+    def _read_node_config(
+        self, config_path: pathlib.Path, scene_file: str = ""
+    ) -> Config:
         """Read the node parameters, print them and return a dictionary."""
         config = self._default_config.copy()
 
-        # Read the parameters
-
+        # Read the parameters from the file
         if config_path.exists():
             with config_path.open("r") as f:
                 file_config = yaml.safe_load(f)
@@ -402,7 +406,8 @@ class HabitatROSNode(Node):
             self.get_logger().info(f"Loaded config from '{config_path}'")
         else:
             self.get_logger().warn(f"Config path '{config_path}' does not exist!")
-
+        if scene_file != "":
+            config["scene_file"] = scene_file
         # Get an absolute path from the supplied scene file
         config["scene_file"] = os.path.expanduser(config["scene_file"])
         if not os.path.isabs(config["scene_file"]):

@@ -4,6 +4,9 @@ launch:
       name: habitat_config
       default: $(find-pkg-share habitat_ros)/config/habitat.yaml
   - arg:
+      name: scene_file
+      default: /developer/hm3d/val/00800-TEEsavR23oF/TEEsavR23oF.basis.glb
+  - arg:
       name: python_env
       default: /developer/habitat_env/bin/python
   - node:
