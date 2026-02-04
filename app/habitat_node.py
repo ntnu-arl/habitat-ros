@@ -302,6 +302,7 @@ class HabitatROSNode(Node):
         "allowed_classes": [],
         "scene_file": "",
         "initial_T_HB": [],
+        "height_offset": 0.0,
         "pose_frame_id": "habitat",
         "pose_frame_at_initial_T_HB": False,
         "visualize_semantics": False,
@@ -518,9 +519,10 @@ class HabitatROSNode(Node):
             self.T_HB = self._T_IC_to_T_HB(T_IC)
         else:
             self.T_HB = config["initial_T_HB"]
-            t_IC, q_IC = split_pose(self._T_HB_to_T_IC(self.T_HB))
-            agent_state = hs.agent.AgentState(t_IC, q_IC)
-            agent.set_state(agent_state)
+        self.T_HB[2, 3] += config["height_offset"]
+        t_IC, q_IC = split_pose(self._T_HB_to_T_IC(self.T_HB))
+        agent_state = hs.agent.AgentState(t_IC, q_IC)
+        agent.set_state(agent_state)
         t_HB, q_HB = split_pose(self.T_HB)
         # Initialize the current pose timestamp to zero.
         self.T_HB_stamp = Time(nanoseconds=0)
