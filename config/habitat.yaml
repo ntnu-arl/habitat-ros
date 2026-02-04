@@ -30,3 +30,6 @@ visualize_semantics: false
 
   # Recording settings
 recording_dir: ''
+
+# Path settings
+path_spacing_s: 0.0  # Time to wait after publishing each pose in the path

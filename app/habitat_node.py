@@ -37,6 +37,7 @@ import math
 import os
 import pathlib
 import threading
+import time
 from typing import Any, Dict, List, Tuple, Union
 
 import cv2
@@ -49,6 +50,7 @@ from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose, PoseStamped, Transform, TransformStamped
 from magnum import Vector3
+from nav_msgs.msg import Path
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.time import Time
@@ -245,6 +247,7 @@ class HabitatROSNode(Node):
     _habitat_pose_topic_name = "pose"
     # Subscribed topic names
     _external_pose_topic_name = "external_pose"
+    _external_path_topic_name = "external_path"
 
     # Transforms between the internal habitat frame I (y-up) and the exported
     # habitat frame H (z-up)
@@ -310,6 +313,7 @@ class HabitatROSNode(Node):
         "world_frame": "world",
         "robot_frame": "base_link",
         "sensor_frame": "camera_link",
+        "path_spacing_s": 0.2,
     }
 
     def __init__(self):
@@ -345,6 +349,9 @@ class HabitatROSNode(Node):
         # Static TF: robot_frame -> camera_link
         self.tf_static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
 
+        # T_HB list
+        self.T_HB_list = []
+
         # Robot to camera static transform
         msg = self._transform_to_msg(
             self._T_RC,
@@ -378,6 +385,11 @@ class HabitatROSNode(Node):
             PoseStamped, self._external_pose_topic_name, self._pose_callback, 1
         )
 
+        # Subscribe to external path
+        self.create_subscription(
+            Path, self._external_path_topic_name, self._path_callback, 1
+        )
+
         self.get_logger().info("Habitat node ready")
 
         # Timer loop
@@ -392,6 +404,8 @@ class HabitatROSNode(Node):
         self._publish_observation(observation, self.pub, self.config)
         if self.config["recording_dir"]:
             self._record_observation(observation, self.config["recording_dir"])
+        if len(self.T_HB_list) > 0:
+            time.sleep(self.config["path_spacing_s"])
 
     def _read_node_config(
         self, config_path: pathlib.Path, scene_file: str = ""
@@ -658,6 +672,7 @@ class HabitatROSNode(Node):
         """Callback for receiving external pose messages. It updates the agent
         pose."""
         # Find the transform from the pose frame F to the habitat frame H
+        LoggerInfo.info(f"Received pose in frame '{pose.header.frame_id}'")
         T_HE = find_tf(self.tf_buffer, "habitat", pose.header.frame_id)
         # Transform the pose
         T_EB = msg_to_pose(pose.pose)
@@ -667,6 +682,26 @@ class HabitatROSNode(Node):
         self.T_HB = T_HB
         self.T_HB_stamp = pose.header.stamp
         self.T_HB_received = True
+        self.T_HB_mutex.release()
+
+    def _path_callback(self, path: Path) -> None:
+        """Callback for receiving an external path."""
+        """Callback for receiving external path messages. It updates the agent
+        pose to the last pose in the path."""
+        LoggerInfo.info(f"Received path with {len(path.poses)} poses")
+        if len(path.poses) == 0:
+            return
+        self.T_HB_mutex.acquire()
+        for pose in path.poses:
+            pose.header.frame_id = "habitat"
+            # Find the transform from the pose frame F to the habitat frame H
+            T_HE = find_tf(self.tf_buffer, "habitat", path.header.frame_id)
+            # Transform the pose
+            T_EB = msg_to_pose(pose.pose)
+            T_HB = T_HE @ T_EB
+            # Update the pose
+            self.T_HB_list.append(T_HB)
+            self.T_HB_received = True
         self.T_HB_mutex.release()
 
     def _filter_sem_classes(self, observation: Observation) -> None:
@@ -796,10 +831,17 @@ class HabitatROSNode(Node):
         pose."""
         # Receive the latest pose.
         self.T_HB_mutex.acquire()
-        T_HB = np.copy(self.T_HB)
-        stamp = self.T_HB_stamp
+        T_HB = np.copy(self.T_HB) if len(self.T_HB_list) == 0 else self.T_HB_list[0]
+        self.T_HB = np.copy(T_HB)
+        stamp = (
+            self.T_HB_stamp
+            if len(self.T_HB_list) == 0
+            else self.get_clock().now().to_msg()
+        )
+        if len(self.T_HB_list) > 0:
+            self.T_HB_list.pop(0)
         T_HB_received = self.T_HB_received
-        self.T_HB_received = False
+        self.T_HB_received = False if len(self.T_HB_list) == 0 else True
         self.T_HB_mutex.release()
         # Move the sensor to the pose contained in self.T_HB.
         t_IC, q_IC = split_pose(self._T_HB_to_T_IC(T_HB))

@@ -7,8 +7,12 @@ launch:
       name: scene_file
       default: /developer/hm3d/val/00800-TEEsavR23oF/TEEsavR23oF.basis.glb
   - arg:
+      name: path_topic_name
+      default: /hydra/plan/path
+  - arg:
       name: python_env
       default: /developer/habitat_env/bin/python
+  - set_remap: {from: /habitat/external_path, to: $(var path_topic_name)}
   - node:
       pkg: habitat_ros
       exec: habitat_node.py
