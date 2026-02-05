@@ -314,6 +314,7 @@ class HabitatROSNode(Node):
         "robot_frame": "base_link",
         "sensor_frame": "camera_link",
         "path_spacing_s": 0.2,
+        "always_publish_pose": False,
     }
 
     def __init__(self):
@@ -400,8 +401,9 @@ class HabitatROSNode(Node):
     def _main_loop(self) -> None:
         """Main loop: move the agent, render and publish the observation, and
         record if needed."""
-        observation = self._move_and_render(self.sim, self.config)
-        self._publish_observation(observation, self.pub, self.config)
+        observation, new_pose = self._move_and_render(self.sim, self.config)
+        if new_pose or self.config["always_publish_pose"]:
+            self._publish_observation(observation, self.pub, self.config)
         if self.config["recording_dir"]:
             self._record_observation(observation, self.config["recording_dir"])
         if len(self.T_HB_list) > 0:
@@ -539,8 +541,8 @@ class HabitatROSNode(Node):
         agent.set_state(agent_state)
         t_HB, q_HB = split_pose(self.T_HB)
         # Initialize the current pose timestamp to zero.
-        self.T_HB_stamp = Time(nanoseconds=0)
-        self.T_HB_received = False
+        self.T_HB_stamp = self.get_clock().now().to_msg()
+        self.T_HB_received = True
         self.get_logger().info(
             "Habitat initial t_HB (x,y,z):   {}, {}, {}".format(
                 t_HB[0], t_HB[1], t_HB[2]
@@ -826,7 +828,7 @@ class HabitatROSNode(Node):
         """Convert T_HB to T_IC."""
         return self._T_IH @ T_HB @ self._T_BC
 
-    def _move_and_render(self, sim: Sim, config: Config) -> Observation:
+    def _move_and_render(self, sim: Sim, config: Config) -> tuple[Observation, bool]:
         """Move the habitat sensor and return its observations and ground truth
         pose."""
         # Receive the latest pose.
@@ -875,7 +877,7 @@ class HabitatROSNode(Node):
         q_IC = sim.get_agent(0).get_state().rotation
         T_IC = combine_pose(t_IC, q_IC)
         observation["T_HB"] = self._T_IC_to_T_HB(T_IC)
-        return observation
+        return observation, T_HB_received
 
     def _publish_observation(
         self, obs: Observation, pub: Publishers, config: Config
