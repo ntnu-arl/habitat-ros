@@ -36,3 +36,8 @@ path_spacing_s: 0.0  # Time to wait after publishing each pose in the path
 
 # Pose publishing settings
 always_publish_pose: true
+
+# Starting yaw movement
+start_360_yaw: true
+start_spacing_s: .7
+start_num_poses: 10

@@ -54,7 +54,9 @@ from nav_msgs.msg import Path
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.time import Time
+from scipy.spatial.transform import Rotation as R
 from sensor_msgs.msg import CameraInfo, Image
+from std_msgs.msg import Bool
 
 import habitat_ros
 import habitat_sim as hs
@@ -315,6 +317,9 @@ class HabitatROSNode(Node):
         "sensor_frame": "camera_link",
         "path_spacing_s": 0.2,
         "always_publish_pose": False,
+        "start_360_yaw": False,
+        "start_spacing_s": 0.2,
+        "start_num_poses": 36,
     }
 
     def __init__(self):
@@ -330,6 +335,14 @@ class HabitatROSNode(Node):
         config_path = pathlib.Path(config_path).expanduser().absolute()
         # Read config
         self.config = self._read_node_config(config_path, scene_file)
+
+        # T_HB list
+        self.T_HB_list = []
+        self.start_movement = self.config["start_360_yaw"]
+        if not self.start_movement:
+            bool_msg = Bool()
+            bool_msg.data = True
+            self.pub["ready"].publish(bool_msg)
 
         # Init Habitat simulator
         self.sim = self._init_habitat(self.config)
@@ -349,9 +362,6 @@ class HabitatROSNode(Node):
 
         # Static TF: robot_frame -> camera_link
         self.tf_static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
-
-        # T_HB list
-        self.T_HB_list = []
 
         # Robot to camera static transform
         msg = self._transform_to_msg(
@@ -407,7 +417,10 @@ class HabitatROSNode(Node):
         if self.config["recording_dir"]:
             self._record_observation(observation, self.config["recording_dir"])
         if len(self.T_HB_list) > 0:
-            time.sleep(self.config["path_spacing_s"])
+            if self.start_movement:
+                time.sleep(self.config["start_spacing_s"])
+            else:
+                time.sleep(self.config["path_spacing_s"])
 
     def _read_node_config(
         self, config_path: pathlib.Path, scene_file: str = ""
@@ -553,6 +566,17 @@ class HabitatROSNode(Node):
                 q_HB.x, q_HB.y, q_HB.z, q_HB.w
             )
         )
+        if config["start_360_yaw"]:
+            self.T_HB_list.append(self.T_HB)
+            current_T_HB = np.eye(4)
+            current_T_HB[0:3, 3] = t_HB
+            current_T_HB[0:3, 0:3] = quaternion.as_rotation_matrix(q_HB)
+            for i in range(config["start_num_poses"]):
+                yaw = (i + 1) * 360.0 / config["start_num_poses"]
+                delta_T_HB = np.eye(4)
+                delta_T_HB[:3, :3] = R.from_euler("z", yaw, degrees=True).as_matrix()
+                next_T_HB = np.dot(current_T_HB, delta_T_HB)
+                self.T_HB_list.append(next_T_HB)
         return sim
 
     def _rgb_sensor_config(self, config: Config) -> hs.CameraSensorSpec:
@@ -666,6 +690,8 @@ class HabitatROSNode(Node):
             pub[topic + "_camera_info"] = self.create_publisher(
                 CameraInfo, topic + "camera_info", image_queue_size
             )
+
+        pub["ready"] = self.create_publisher(Bool, "ready", image_queue_size)
 
         return pub
 
@@ -840,10 +866,12 @@ class HabitatROSNode(Node):
             if len(self.T_HB_list) == 0
             else self.get_clock().now().to_msg()
         )
+        self.T_HB_received = False if len(self.T_HB_list) == 0 else True
         if len(self.T_HB_list) > 0:
             self.T_HB_list.pop(0)
+        else:
+            self.start_movement = False
         T_HB_received = self.T_HB_received
-        self.T_HB_received = False if len(self.T_HB_list) == 0 else True
         self.T_HB_mutex.release()
         # Move the sensor to the pose contained in self.T_HB.
         t_IC, q_IC = split_pose(self._T_HB_to_T_IC(T_HB))
@@ -907,6 +935,10 @@ class HabitatROSNode(Node):
                 pub["sem_instance_render"].publish(
                     self._render_sem_instances_to_msg(obs)
                 )
+        if not self.start_movement:
+            bool_msg = Bool()
+            bool_msg.data = True
+            self.pub["ready"].publish(bool_msg)
 
     def _record_observation(self, obs: Observation, recording_dir: str) -> None:
         os.makedirs(recording_dir, exist_ok=True)
