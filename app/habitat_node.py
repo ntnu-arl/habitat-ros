@@ -339,10 +339,6 @@ class HabitatROSNode(Node):
         # T_HB list
         self.T_HB_list = []
         self.start_movement = self.config["start_360_yaw"]
-        if not self.start_movement:
-            bool_msg = Bool()
-            bool_msg.data = True
-            self.pub["ready"].publish(bool_msg)
 
         # Init Habitat simulator
         self.sim = self._init_habitat(self.config)
@@ -400,6 +396,11 @@ class HabitatROSNode(Node):
         self.create_subscription(
             Path, self._external_path_topic_name, self._path_callback, 1
         )
+
+        if not self.start_movement:
+            bool_msg = Bool()
+            bool_msg.data = True
+            self.pub["ready"].publish(bool_msg)
 
         self.get_logger().info("Habitat node ready")
 
