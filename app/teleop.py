@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2020-2021 Sotiris Papatheodorou
 # BSD 3-Clause License
 
-# Copyright (c) 2025, NTNU Autonomous Robots Lab
+# Copyright (c) 2026, NTNU Autonomous Robots Lab
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
