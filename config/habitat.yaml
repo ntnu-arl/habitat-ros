@@ -39,5 +39,8 @@ always_publish_pose: true
 
 # Starting yaw movement
 start_360_yaw: true
-start_spacing_s: .7
+start_spacing_s: 1.0
 start_num_poses: 10
+
+# Triggered start settings
+triggered_start: true

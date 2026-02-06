@@ -53,6 +53,7 @@ from magnum import Vector3
 from nav_msgs.msg import Path
 from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from scipy.spatial.transform import Rotation as R
 from sensor_msgs.msg import CameraInfo, Image
@@ -250,6 +251,7 @@ class HabitatROSNode(Node):
     # Subscribed topic names
     _external_pose_topic_name = "external_pose"
     _external_path_topic_name = "external_path"
+    _trigger_start_topic_name = "trigger_start"
 
     # Transforms between the internal habitat frame I (y-up) and the exported
     # habitat frame H (z-up)
@@ -320,6 +322,7 @@ class HabitatROSNode(Node):
         "start_360_yaw": False,
         "start_spacing_s": 0.2,
         "start_num_poses": 36,
+        "triggered_start": False,
     }
 
     def __init__(self):
@@ -359,6 +362,17 @@ class HabitatROSNode(Node):
         # Static TF: robot_frame -> camera_link
         self.tf_static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
 
+        self.start = True
+        if self.config["triggered_start"]:
+            self.start = False
+            qos = QoSProfile(
+                depth=1,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                reliability=ReliabilityPolicy.RELIABLE,
+            )
+            self.create_subscription(
+                Bool, self._trigger_start_topic_name, self._trigger_start_callback, qos
+            )
         # Robot to camera static transform
         msg = self._transform_to_msg(
             self._T_RC,
@@ -412,6 +426,8 @@ class HabitatROSNode(Node):
     def _main_loop(self) -> None:
         """Main loop: move the agent, render and publish the observation, and
         record if needed."""
+        if not self.start:
+            return
         observation, new_pose = self._move_and_render(self.sim, self.config)
         if new_pose or self.config["always_publish_pose"]:
             self._publish_observation(observation, self.pub, self.config)
@@ -692,7 +708,13 @@ class HabitatROSNode(Node):
                 CameraInfo, topic + "camera_info", image_queue_size
             )
 
-        pub["ready"] = self.create_publisher(Bool, "ready", image_queue_size)
+        ready_qos = QoSProfile(
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
+
+        pub["ready"] = self.create_publisher(Bool, "ready", ready_qos)
 
         return pub
 
@@ -732,6 +754,11 @@ class HabitatROSNode(Node):
             self.T_HB_list.append(T_HB)
             self.T_HB_received = True
         self.T_HB_mutex.release()
+
+    def _trigger_start_callback(self, msg: Bool) -> None:
+        """Callback for receiving a start trigger."""
+        LoggerInfo.info(f"Received start trigger: {msg.data}")
+        self.start = msg.data
 
     def _filter_sem_classes(self, observation: Observation) -> None:
         """Remove object detections whose classes are not in the allowed class
