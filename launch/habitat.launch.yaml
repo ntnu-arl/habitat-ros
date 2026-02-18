@@ -13,7 +13,7 @@ launch:
       name: trigger_start_topic_name
       default: /habitat/ready
   - arg:
-      name: python_env
+      name: python_env_habitat
       default: /developer/habitat_env/bin/python
   - set_remap: {from: /habitat/external_path, to: $(var path_topic_name)}
   - set_remap: {from: /habitat/trigger_start, to: $(var trigger_start_topic_name)}
@@ -23,7 +23,7 @@ launch:
       name: habitat_node
       namespace: habitat
       on_exit: shutdown
-      launch-prefix: $(var python_env)
+      launch-prefix: $(var python_env_habitat)
       output: screen
       param:
         - name: config_path
