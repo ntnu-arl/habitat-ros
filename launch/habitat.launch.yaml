@@ -4,8 +4,11 @@ launch:
       name: habitat_config
       default: $(find-pkg-share habitat_ros)/config/habitat.yaml
   - arg:
+      name: navmesh_settings
+      default: $(find-pkg-share habitat_ros)/config/navmesh.json
+  - arg:
       name: scene_file
-      default: /developer/hm3d/val/00800-TEEsavR23oF/TEEsavR23oF.basis.glb
+      default: /developer/ros2_hydra_ws/00800-TEEsavR23oF/TEEsavR23oF.glb
   - arg:
       name: path_topic_name
       default: /habitat/plan_path
@@ -28,3 +31,7 @@ launch:
       param:
         - name: config_path
           value: $(var habitat_config)
+        - name: navmesh_settings_path
+          value: $(var navmesh_settings)
+        - name: scene_file
+          value: $(var scene_file)

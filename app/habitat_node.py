@@ -48,7 +48,7 @@ import tf2_ros
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
-from geometry_msgs.msg import Pose, PoseStamped, Transform, TransformStamped
+from geometry_msgs.msg import Pose, PoseArray, PoseStamped, Transform, TransformStamped
 from magnum import Vector3
 from nav_msgs.msg import Path
 from rclpy.duration import Duration
@@ -251,6 +251,7 @@ class HabitatROSNode(Node):
     # Subscribed topic names
     _external_pose_topic_name = "external_pose"
     _external_path_topic_name = "external_path"
+    _external_goal_find_path_topic_name = "external_goal_find_path"
     _trigger_start_topic_name = "trigger_start"
 
     # Transforms between the internal habitat frame I (y-up) and the exported
@@ -323,6 +324,8 @@ class HabitatROSNode(Node):
         "start_spacing_s": 0.2,
         "start_num_poses": 36,
         "triggered_start": False,
+        "inflation_radius": 0.2,
+        "delta_path": 0.1,
     }
 
     def __init__(self):
@@ -335,6 +338,14 @@ class HabitatROSNode(Node):
         scene_file = (
             self.declare_parameter("scene_file", "").get_parameter_value().string_value
         )
+        navmesh_settings_path = (
+            self.declare_parameter("navmesh_settings_path", "")
+            .get_parameter_value()
+            .string_value
+        )
+        navmesh_settings_path = (
+            pathlib.Path(navmesh_settings_path).expanduser().absolute()
+        )
         config_path = pathlib.Path(config_path).expanduser().absolute()
         # Read config
         self.config = self._read_node_config(config_path, scene_file)
@@ -344,7 +355,7 @@ class HabitatROSNode(Node):
         self.start_movement = self.config["start_360_yaw"]
 
         # Init Habitat simulator
-        self.sim = self._init_habitat(self.config)
+        self.sim = self._init_habitat(self.config, navmesh_settings_path)
 
         # Publishers
         self.pub = self._init_publishers(self.config)
@@ -409,6 +420,14 @@ class HabitatROSNode(Node):
         # Subscribe to external path
         self.create_subscription(
             Path, self._external_path_topic_name, self._path_callback, 1
+        )
+
+        # Subscribe to goal
+        self.create_subscription(
+            PoseStamped,
+            self._external_goal_find_path_topic_name,
+            self._goal_callback,
+            1,
         )
 
         if not self.start_movement:
@@ -518,7 +537,7 @@ class HabitatROSNode(Node):
         msg.transform.rotation.w = q_TF.w
         return msg
 
-    def _init_habitat(self, config: Config) -> Sim:
+    def _init_habitat(self, config: Config, navmesh_settings_path: pathlib.Path) -> Sim:
         """Initialize the Habitat simulator, create the sensors and load the
         scene file."""
         backend_config = hs.SimulatorConfiguration()
@@ -583,6 +602,26 @@ class HabitatROSNode(Node):
                 q_HB.x, q_HB.y, q_HB.z, q_HB.w
             )
         )
+
+        # Pathfinder
+        self.pathfinder = hs.nav.PathFinder()
+        settings = hs.NavMeshSettings()
+        if navmesh_settings_path.exists():
+            self.get_logger().info(
+                f"Loading navmesh settings from '{navmesh_settings_path}'"
+            )
+            settings.read_from_json(str(navmesh_settings_path))
+        else:
+            self.get_logger().warn(
+                f"Navmesh settings path '{navmesh_settings_path}' does not exist! Using default settings."
+            )
+        settings.agent_radius = self.config["inflation_radius"]
+        if not sim.recompute_navmesh(self.pathfinder, settings):
+            raise RuntimeError(
+                "Failed to compute the navigation graph with the given inflation radius!"
+            )
+
+        # If start_360_yaw is enabled, create a list of T_HB matrices with different yaw angles around the initial pose
         if config["start_360_yaw"]:
             self.T_HB_list.append(self.T_HB)
             current_T_HB = np.eye(4)
@@ -715,6 +754,7 @@ class HabitatROSNode(Node):
         )
 
         pub["ready"] = self.create_publisher(Bool, "ready", ready_qos)
+        pub["goal_path"] = self.create_publisher(PoseArray, "goal_path", 10)
 
         return pub
 
@@ -754,6 +794,128 @@ class HabitatROSNode(Node):
             self.T_HB_list.append(T_HB)
             self.T_HB_received = True
         self.T_HB_mutex.release()
+
+    def _goal_callback(self, goal: PoseStamped) -> None:
+        self.T_HB_mutex.acquire()
+
+        t_IC, _ = split_pose(self._T_HB_to_T_IC(self.T_HB))
+        T_HB_goal = msg_to_pose(goal.pose)
+        goal_t_IC, _ = split_pose(self._T_HB_to_T_IC(T_HB_goal))
+        path = hs.nav.ShortestPath()
+        path.requested_start = t_IC
+        path.requested_end = goal_t_IC
+        found_path = self.pathfinder.find_path(path)
+        if not found_path:
+            LoggerWarn.warning("Failed to find path to goal")
+            self.T_HB_mutex.release()
+            return
+
+        points = np.asarray(path.points[1:-1])
+        # Create a Nx4x4 array of T_HB matrices for each point in the path
+        T_HB_list = np.zeros((len(points), 4, 4))
+        T_HB_list[:, 0:3, 3] = points
+        T_HB_list[:, 3, 3] = 1.0
+        T_HB_list[:, 0:3, 0:3] = np.eye(3)
+        desired_path = self._T_IC_to_T_HB(T_HB_list)
+        full_path = np.concatenate(
+            (
+                self.T_HB[None, ...],
+                desired_path,
+                T_HB_goal[None, ...],
+            ),
+            axis=0,
+        )
+
+        directions = np.diff(full_path[:, 0:3, 3], axis=0)
+        yaws = np.arctan2(directions[:, 1], directions[:, 0])
+        c = np.cos(yaws)
+        s = np.sin(yaws)
+
+        R = np.zeros((len(yaws), 3, 3))
+        R[:, 0, 0] = c
+        R[:, 0, 1] = -s
+        R[:, 1, 0] = s
+        R[:, 1, 1] = c
+        R[:, 2, 2] = 1.0
+
+        full_path[1:-1, 0:3, 0:3] = R[:-1]
+        full_path = self.resample_path_with_yaw(full_path)
+        self.T_HB_list = [T for T in full_path]
+        self.T_HB_received = True
+        pose_array_msg = PoseArray()
+        pose_array_msg.header.stamp = self.get_clock().now().to_msg()
+        pose_array_msg.header.frame_id = "habitat"
+        pose_array_msg.poses = [self._pose_normal_to_msg(T) for T in self.T_HB_list]
+        self.pub["goal_path"].publish(pose_array_msg)
+        self.T_HB_mutex.release()
+
+    @staticmethod
+    def wrap_angle(angle):
+        return (angle + np.pi) % (2 * np.pi) - np.pi
+
+    def interpolate_angle(self, a0, a1, t):
+        """Shortest-path angle interpolation"""
+        diff = self.wrap_angle(a1 - a0)
+        return self.wrap_angle(a0 + t * diff)
+
+    def resample_path_with_yaw(self, full_path: np.ndarray) -> np.ndarray:
+        """
+        Resample SE(3) path with smooth yaw interpolation.
+        Assumes Z-up and planar motion.
+        """
+        positions = full_path[:, 0:3, 3]
+
+        # Extract yaw from rotation matrices
+        yaws = np.arctan2(full_path[:, 1, 0], full_path[:, 0, 0])
+
+        new_positions = []
+        new_yaws = []
+
+        for i in range(len(positions) - 1):
+            p0 = positions[i]
+            p1 = positions[i + 1]
+            yaw0 = yaws[i]
+            yaw1 = yaws[i + 1]
+
+            segment = p1 - p0
+            dist = np.linalg.norm(segment)
+
+            if dist < 1e-6:
+                continue
+
+            n_steps = max(int(np.floor(dist / self.config["delta_path"])), 1)
+
+            for k in range(n_steps):
+                t = k / n_steps
+                pos = (1 - t) * p0 + t * p1
+                yaw = self.interpolate_angle(yaw0, yaw1, t)
+
+                new_positions.append(pos)
+                new_yaws.append(yaw)
+
+        # Append final pose
+        new_positions.append(positions[-1])
+        new_yaws.append(yaws[-1])
+
+        new_positions = np.array(new_positions)
+        new_yaws = np.array(new_yaws)
+
+        # Build new SE(3) path
+        M = len(new_positions)
+        new_path = np.zeros((M, 4, 4))
+        new_path[:, 0:3, 3] = new_positions
+        new_path[:, 3, 3] = 1.0
+
+        c = np.cos(new_yaws)
+        s = np.sin(new_yaws)
+
+        new_path[:, 0, 0] = c
+        new_path[:, 0, 1] = -s
+        new_path[:, 1, 0] = s
+        new_path[:, 1, 1] = c
+        new_path[:, 2, 2] = 1.0
+
+        return new_path
 
     def _trigger_start_callback(self, msg: Bool) -> None:
         """Callback for receiving a start trigger."""
@@ -795,6 +957,19 @@ class HabitatROSNode(Node):
         p.pose.orientation.y = q_PB.y
         p.pose.orientation.z = q_PB.z
         p.pose.orientation.w = q_PB.w
+        return p
+
+    def _pose_normal_to_msg(self, pose: np.ndarray) -> Pose:
+        """Convert a pose in the form of a 4x4 numpy array to a ROS Pose message."""
+        t, q = split_pose(pose)
+        p = Pose()
+        p.position.x = t[0]
+        p.position.y = t[1]
+        p.position.z = t[2]
+        p.orientation.x = q.x
+        p.orientation.y = q.y
+        p.orientation.z = q.z
+        p.orientation.w = q.w
         return p
 
     def _camera_intrinsics_to_msg(

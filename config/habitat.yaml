@@ -44,3 +44,7 @@ start_num_poses: 10
 
 # Triggered start settings
 triggered_start: true
+
+# Agent settings
+inflation_radius: 0.2
+delta_path: 0.1
