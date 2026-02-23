@@ -251,7 +251,7 @@ class HabitatROSNode(Node):
     # Subscribed topic names
     _external_pose_topic_name = "external_pose"
     _external_path_topic_name = "external_path"
-    _external_goal_find_path_topic_name = "external_goal_find_path"
+    _external_goal_find_path_topic_name = "sim_goal"
     _trigger_start_topic_name = "trigger_start"
 
     # Transforms between the internal habitat frame I (y-up) and the exported

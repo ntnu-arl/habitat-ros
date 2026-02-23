@@ -13,6 +13,9 @@ launch:
       name: path_topic_name
       default: /habitat/plan_path
   - arg:
+      name: sim_goal_topic_name
+      default: /habitat/sim_goal
+  - arg:
       name: trigger_start_topic_name
       default: /habitat/ready
   - arg:
@@ -20,6 +23,7 @@ launch:
       default: /developer/habitat_env/bin/python
   - set_remap: {from: /habitat/external_path, to: $(var path_topic_name)}
   - set_remap: {from: /habitat/trigger_start, to: $(var trigger_start_topic_name)}
+  - set_remap: {from: /habitat/sim_goal, to: $(var sim_goal_topic_name)}
   - node:
       pkg: habitat_ros
       exec: habitat_node.py
