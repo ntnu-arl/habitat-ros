@@ -446,13 +446,15 @@ class HabitatROSNode(Node):
         """Main loop: move the agent, render and publish the observation, and
         record if needed."""
         if not self.start:
-            return
-        observation, new_pose = self._move_and_render(self.sim, self.config)
+            new_pose = True
+            observation = self._render(self.sim, self.config)
+        else:
+            observation, new_pose = self._move_and_render(self.sim, self.config)
         if new_pose or self.config["always_publish_pose"]:
             self._publish_observation(observation, self.pub, self.config)
         if self.config["recording_dir"]:
             self._record_observation(observation, self.config["recording_dir"])
-        if len(self.T_HB_list) > 0:
+        if len(self.T_HB_list) > 0 and self.start:
             if self.start_movement:
                 time.sleep(self.config["start_spacing_s"])
             else:
@@ -1056,6 +1058,30 @@ class HabitatROSNode(Node):
     def _T_HB_to_T_IC(self, T_HB: np.array) -> np.array:
         """Convert T_HB to T_IC."""
         return self._T_IH @ T_HB @ self._T_BC
+
+    def _render(self, sim: Sim, config: Config) -> Observation:
+        stamp = self.get_clock().now().to_msg()
+        observation = sim.get_sensor_observations()
+        observation["timestamp"] = stamp
+        observation["rgb"] = observation["rgb"][..., 0:3]
+        if config["enable_semantics"] and config["instance_to_class"].size > 0:
+            # Assuming the scene has no more than 65534 objects
+            observation["sem_instances"] = np.clip(
+                observation["semantic"].astype(np.uint16), 0, 65535
+            )
+            del observation["semantic"]
+            # Convert instance IDs to class IDs
+            observation["sem_classes"] = np.array(
+                [config["instance_to_class"][x] for x in observation["sem_instances"]],
+                dtype=np.uint8,
+            )
+        # Get the camera ground truth pose (T_IC) in the habitat frame from the
+        # position and orientation
+        t_IC = sim.get_agent(0).get_state().position
+        q_IC = sim.get_agent(0).get_state().rotation
+        T_IC = combine_pose(t_IC, q_IC)
+        observation["T_HB"] = self._T_IC_to_T_HB(T_IC)
+        return observation
 
     def _move_and_render(self, sim: Sim, config: Config) -> tuple[Observation, bool]:
         """Move the habitat sensor and return its observations and ground truth
