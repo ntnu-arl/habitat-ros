@@ -21,6 +21,12 @@ launch:
   - arg:
       name: python_env_habitat
       default: /developer/habitat_env/bin/python
+  - arg:
+      name: initial_T_HB
+      default: '[]'
+  - arg:
+      name: height_offset
+      default: '0.0'
   - set_remap: {from: /habitat/external_path, to: $(var path_topic_name)}
   - set_remap: {from: /habitat/trigger_start, to: $(var trigger_start_topic_name)}
   - set_remap: {from: /habitat/sim_goal, to: $(var sim_goal_topic_name)}
@@ -39,3 +45,7 @@ launch:
           value: $(var navmesh_settings)
         - name: scene_file
           value: $(var scene_file)
+        - name: initial_T_HB
+          value: $(var initial_T_HB)
+        - name: height_offset
+          value: $(var height_offset)

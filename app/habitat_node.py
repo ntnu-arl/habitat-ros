@@ -487,21 +487,31 @@ class HabitatROSNode(Node):
         if not config["scene_file"] or not os.path.isfile(config["scene_file"]):
             raise RuntimeError("Scene file missing or invalid: " + config["scene_file"])
 
-        self.get_logger().info("Habitat node parameters:")
-        for name, val in config.items():
-            self.get_logger().info(f"  {name}: {val}")
-
         # Create the initial T_HB matrix
+        initial_T_HB = (
+            self.declare_parameter("initial_T_HB", [0.0])
+            .get_parameter_value()
+            .double_array_value
+        )
+        if len(initial_T_HB) > 1:
+            config["initial_T_HB"] = initial_T_HB
         T = list_to_pose(config["initial_T_HB"])
         if T is None and config["initial_T_HB"]:
             self.get_logger().error(
                 "Invalid initial T_HB. Expected list of 3, 4, 7 or 16 elements"
             )
         config["initial_T_HB"] = T
+        height_offset = (
+            self.declare_parameter("height_offset", config["height_offset"])
+            .get_parameter_value()
+            .double_value
+        )
+        if height_offset != config["height_offset"]:
+            config["height_offset"] = height_offset
         if config["recording_dir"]:
             config["recording_dir"] = os.path.expanduser(config["recording_dir"])
-        self.get_logger().info("Habitat node parameters:")
-        print_config(config)
+        for name, val in config.items():
+            self.get_logger().info(f"  {name}: {val}")
         return config
 
     def _broadcast_tf(self, T_HB: np.array) -> None:
