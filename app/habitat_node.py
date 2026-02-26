@@ -488,11 +488,11 @@ class HabitatROSNode(Node):
             raise RuntimeError("Scene file missing or invalid: " + config["scene_file"])
 
         # Create the initial T_HB matrix
-        initial_T_HB = (
-            self.declare_parameter("initial_T_HB", [0.0])
-            .get_parameter_value()
-            .double_array_value
+        self.declare_parameter(
+            "initial_T_HB", rclpy.parameter.Parameter.Type.DOUBLE_ARRAY
         )
+
+        initial_T_HB = self.get_parameter("initial_T_HB").value
         if len(initial_T_HB) > 1:
             config["initial_T_HB"] = initial_T_HB
         T = list_to_pose(config["initial_T_HB"])
@@ -502,11 +502,11 @@ class HabitatROSNode(Node):
             )
         config["initial_T_HB"] = T
         height_offset = (
-            self.declare_parameter("height_offset", config["height_offset"])
+            self.declare_parameter("height_offset", -100.0)
             .get_parameter_value()
             .double_value
         )
-        if height_offset != config["height_offset"]:
+        if height_offset != -100.0:
             config["height_offset"] = height_offset
         if config["recording_dir"]:
             config["recording_dir"] = os.path.expanduser(config["recording_dir"])
@@ -595,7 +595,7 @@ class HabitatROSNode(Node):
             T_IC = combine_pose(t_IC, q_IC)
             self.T_HB = self._T_IC_to_T_HB(T_IC)
         else:
-            self.T_HB = config["initial_T_HB"]
+            self.T_HB = self._T_IC_to_T_HB(config["initial_T_HB"])
         self.T_HB[2, 3] += config["height_offset"]
         t_IC, q_IC = split_pose(self._T_HB_to_T_IC(self.T_HB))
         agent_state = hs.agent.AgentState(t_IC, q_IC)

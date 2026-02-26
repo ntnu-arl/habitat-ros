@@ -26,7 +26,7 @@ launch:
       default: '[]'
   - arg:
       name: height_offset
-      default: '0.0'
+      default: '-100.0'
   - set_remap: {from: /habitat/external_path, to: $(var path_topic_name)}
   - set_remap: {from: /habitat/trigger_start, to: $(var trigger_start_topic_name)}
   - set_remap: {from: /habitat/sim_goal, to: $(var sim_goal_topic_name)}
