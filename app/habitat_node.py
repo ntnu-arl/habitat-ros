@@ -798,6 +798,9 @@ class HabitatROSNode(Node):
         self.T_HB_mutex.release()
 
     def _goal_callback(self, goal: PoseStamped) -> None:
+        self.get_logger().info(
+            f"Received sim goal pose in frame '{goal.header.frame_id}'"
+        )
         self.T_HB_mutex.acquire()
 
         t_IC, _ = split_pose(self._T_HB_to_T_IC(self.T_HB))
@@ -808,39 +811,56 @@ class HabitatROSNode(Node):
         path.requested_end = goal_t_IC
         found_path = self.pathfinder.find_path(path)
         if not found_path:
-            LoggerWarn.warning("Failed to find path to goal")
+            self.get_logger().warning("Failed to find path to goal")
             self.T_HB_mutex.release()
             return
 
-        points = np.asarray(path.points[1:-1])
-        # Create a Nx4x4 array of T_HB matrices for each point in the path
-        T_HB_list = np.zeros((len(points), 4, 4))
-        T_HB_list[:, 0:3, 3] = points
-        T_HB_list[:, 3, 3] = 1.0
-        T_HB_list[:, 0:3, 0:3] = np.eye(3)
-        desired_path = self._T_IC_to_T_HB(T_HB_list)
-        full_path = np.concatenate(
-            (
-                self.T_HB[None, ...],
-                desired_path,
-                T_HB_goal[None, ...],
-            ),
-            axis=0,
-        )
+        if len(path.points) < 2:
+            self.get_logger().warning("Path to goal is empty")
+            self.T_HB_mutex.release()
+            return
 
-        directions = np.diff(full_path[:, 0:3, 3], axis=0)
-        yaws = np.arctan2(directions[:, 1], directions[:, 0])
-        c = np.cos(yaws)
-        s = np.sin(yaws)
+        if len(path.points) == 2:
+            self.get_logger().warning(
+                "Path to goal is only two points, interpolating between start and goal"
+            )
+            full_path = np.concatenate(
+                (
+                    self.T_HB[None, ...],
+                    T_HB_goal[None, ...],
+                ),
+                axis=0,
+            )
+        else:
+            points = np.asarray(path.points[1:-1])
+            # Create a Nx4x4 array of T_HB matrices for each point in the path
+            T_HB_list = np.zeros((len(points), 4, 4))
+            T_HB_list[:, 0:3, 3] = points
+            T_HB_list[:, 3, 3] = 1.0
+            T_HB_list[:, 0:3, 0:3] = np.eye(3)
+            desired_path = self._T_IC_to_T_HB(T_HB_list)
+            full_path = np.concatenate(
+                (
+                    self.T_HB[None, ...],
+                    desired_path,
+                    T_HB_goal[None, ...],
+                ),
+                axis=0,
+            )
 
-        R = np.zeros((len(yaws), 3, 3))
-        R[:, 0, 0] = c
-        R[:, 0, 1] = -s
-        R[:, 1, 0] = s
-        R[:, 1, 1] = c
-        R[:, 2, 2] = 1.0
+            directions = np.diff(full_path[:, 0:3, 3], axis=0)
+            yaws = np.arctan2(directions[:, 1], directions[:, 0])
+            c = np.cos(yaws)
+            s = np.sin(yaws)
 
-        full_path[1:-1, 0:3, 0:3] = R[:-1]
+            R = np.zeros((len(yaws), 3, 3))
+            R[:, 0, 0] = c
+            R[:, 0, 1] = -s
+            R[:, 1, 0] = s
+            R[:, 1, 1] = c
+            R[:, 2, 2] = 1.0
+
+            full_path[1:-1, 0:3, 0:3] = R[:-1]
         full_path = self.resample_path_with_yaw(full_path)
         self.T_HB_list = [T for T in full_path]
         self.T_HB_received = True
