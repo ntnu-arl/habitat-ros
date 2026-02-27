@@ -311,6 +311,7 @@ class HabitatROSNode(Node):
         "scene_file": "",
         "initial_T_HB": [],
         "height_offset": 0.0,
+        "tilt_pitch_deg": 0.0,
         "pose_frame_id": "habitat",
         "pose_frame_at_initial_T_HB": False,
         "visualize_semantics": False,
@@ -501,6 +502,18 @@ class HabitatROSNode(Node):
                 "Invalid initial T_HB. Expected list of 3, 4, 7 or 16 elements"
             )
         config["initial_T_HB"] = T
+
+        tilt_pitch_deg = (
+            self.declare_parameter("tilt_pitch_deg", -1000.0)
+            .get_parameter_value()
+            .double_value
+        )
+        if tilt_pitch_deg != -1000.0:
+            config["tilt_pitch_deg"] = tilt_pitch_deg
+            assert -90.0 <= tilt_pitch_deg <= 90.0, (
+                "tilt_pitch_deg must be between -90 and 90 degrees"
+            )
+
         height_offset = (
             self.declare_parameter("height_offset", -100.0)
             .get_parameter_value()
@@ -597,6 +610,16 @@ class HabitatROSNode(Node):
         else:
             self.T_HB = self._T_IC_to_T_HB(config["initial_T_HB"])
         self.T_HB[2, 3] += config["height_offset"]
+        # Apply tilt if specified
+        self.T_tilt = np.eye(4)
+        if config["tilt_pitch_deg"] != 0.0:
+            tilt_pitch_rad = math.radians(config["tilt_pitch_deg"])
+            R_tilt = R.from_euler(
+                "xyz", np.array([0.0, tilt_pitch_rad, 0.0])
+            ).as_matrix()
+            self.T_tilt[0:3, 0:3] = R_tilt
+            self.T_HB = self.T_HB @ self.T_tilt
+
         t_IC, q_IC = split_pose(self._T_HB_to_T_IC(self.T_HB))
         agent_state = hs.agent.AgentState(t_IC, q_IC)
         agent.set_state(agent_state)
@@ -782,7 +805,7 @@ class HabitatROSNode(Node):
         T_HB = T_HE @ T_EB
         # Update the pose
         self.T_HB_mutex.acquire()
-        self.T_HB = T_HB
+        self.T_HB = T_HB @ self.T_tilt
         self.T_HB_stamp = pose.header.stamp
         self.T_HB_received = True
         self.T_HB_mutex.release()
@@ -801,7 +824,7 @@ class HabitatROSNode(Node):
             T_HE = find_tf(self.tf_buffer, "habitat", path.header.frame_id)
             # Transform the pose
             T_EB = msg_to_pose(pose.pose)
-            T_HB = T_HE @ T_EB
+            T_HB = T_HE @ T_EB @ self.T_tilt
             # Update the pose
             self.T_HB_list.append(T_HB)
             self.T_HB_received = True
@@ -872,7 +895,7 @@ class HabitatROSNode(Node):
 
             full_path[1:-1, 0:3, 0:3] = R[:-1]
         full_path = self.resample_path_with_yaw(full_path)
-        self.T_HB_list = [T for T in full_path]
+        self.T_HB_list = [T @ self.T_tilt for T in full_path]
         self.T_HB_received = True
         pose_array_msg = PoseArray()
         pose_array_msg.header.stamp = self.get_clock().now().to_msg()
