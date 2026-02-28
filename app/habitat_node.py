@@ -660,13 +660,15 @@ class HabitatROSNode(Node):
         if config["start_360_yaw"]:
             self.T_HB_list.append(self.T_HB)
             current_T_HB = np.eye(4)
-            current_T_HB[0:3, 3] = t_HB
-            current_T_HB[0:3, 0:3] = quaternion.as_rotation_matrix(q_HB)
+            T_HB_no_tilt = self.T_HB @ np.linalg.inv(self.T_tilt)
+            t_HB_nt, q_HB_nt = split_pose(T_HB_no_tilt)
+            current_T_HB[0:3, 3] = t_HB_nt
+            current_T_HB[0:3, 0:3] = quaternion.as_rotation_matrix(q_HB_nt)
             for i in range(config["start_num_poses"]):
                 yaw = (i + 1) * 360.0 / config["start_num_poses"]
                 delta_T_HB = np.eye(4)
                 delta_T_HB[:3, :3] = R.from_euler("z", yaw, degrees=True).as_matrix()
-                next_T_HB = np.dot(current_T_HB, delta_T_HB)
+                next_T_HB = np.dot(current_T_HB, delta_T_HB) @ self.T_tilt
                 self.T_HB_list.append(next_T_HB)
         return sim
 
@@ -872,6 +874,7 @@ class HabitatROSNode(Node):
             T_HB_list[:, 3, 3] = 1.0
             T_HB_list[:, 0:3, 0:3] = np.eye(3)
             desired_path = self._T_IC_to_T_HB(T_HB_list)
+            desired_path[:, 2, 3] = self.T_HB[:3, 2]  # Set same hight as current pose
             full_path = np.concatenate(
                 (
                     self.T_HB[None, ...],
