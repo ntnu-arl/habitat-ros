@@ -492,8 +492,11 @@ class HabitatROSNode(Node):
         self.declare_parameter(
             "initial_T_HB", rclpy.parameter.Parameter.Type.DOUBLE_ARRAY
         )
-
-        initial_T_HB = self.get_parameter("initial_T_HB").value
+        try:
+            initial_T_HB = self.get_parameter("initial_T_HB").value
+        except rclpy.exceptions.ParameterUninitializedException:
+            self.get_logger().warn("initial_T_HB parameter not declared")
+            initial_T_HB = []
         if len(initial_T_HB) > 1:
             config["initial_T_HB"] = initial_T_HB
         T = list_to_pose(config["initial_T_HB"])
