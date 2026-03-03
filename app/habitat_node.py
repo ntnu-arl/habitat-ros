@@ -877,7 +877,7 @@ class HabitatROSNode(Node):
             T_HB_list[:, 3, 3] = 1.0
             T_HB_list[:, 0:3, 0:3] = np.eye(3)
             desired_path = self._T_IC_to_T_HB(T_HB_list)
-            desired_path[:, 2, 3] = self.T_HB[:3, 2]  # Set same hight as current pose
+            desired_path[:, 2, 3] = self.T_HB[2, 3]  # Set same hight as current pose
             full_path = np.concatenate(
                 (
                     self.T_HB[None, ...],
