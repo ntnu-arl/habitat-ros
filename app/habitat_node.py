@@ -795,6 +795,7 @@ class HabitatROSNode(Node):
 
         pub["ready"] = self.create_publisher(Bool, "ready", ready_qos)
         pub["goal_path"] = self.create_publisher(PoseArray, "goal_path", 10)
+        pub["failed_goal"] = self.create_publisher(Bool, "failed_goal", ready_qos)
 
         return pub
 
@@ -851,11 +852,17 @@ class HabitatROSNode(Node):
         if not found_path:
             self.get_logger().warning("Failed to find path to goal")
             self.T_HB_mutex.release()
+            bool_msg = Bool()
+            bool_msg.data = True
+            self.pub["failed_goal"].publish(bool_msg)
             return
 
         if len(path.points) < 2:
             self.get_logger().warning("Path to goal is empty")
             self.T_HB_mutex.release()
+            bool_msg = Bool()
+            bool_msg.data = True
+            self.pub["failed_goal"].publish(bool_msg)
             return
 
         if len(path.points) == 2:
