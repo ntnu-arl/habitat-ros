@@ -309,6 +309,7 @@ class HabitatROSNode(Node):
         "depth_noise": False,
         "allowed_classes": [],
         "scene_file": "",
+        "colormap_path": "",
         "initial_T_HB": [],
         "height_offset": 0.0,
         "tilt_pitch_deg": 0.0,
@@ -570,6 +571,10 @@ class HabitatROSNode(Node):
         scene file."""
         backend_config = hs.SimulatorConfiguration()
         backend_config.scene_id = config["scene_file"]
+        backend_config.scene_dataset_config_file = str(
+            pathlib.Path(config["scene_file"]).parent.parent
+            / "hm3d_annotated_val_basis.scene_dataset_config.json"
+        )
         agent_config = hs.AgentConfiguration()
         backend_config.gpu_device_id = -1  # Use CPU
         agent_config.sensor_specifications = [
@@ -598,10 +603,10 @@ class HabitatROSNode(Node):
         # Setup the instance/class conversion map
         if config["enable_semantics"]:
             config["instance_to_class"] = self._instance_to_class_map(
-                remove_invalid_objects(sim.semantic_scene.objects),
-                self.class_id_to_name,
+                sim.semantic_scene.objects
             )
-            if config["instance_to_class"].size == 0:
+            config["colormap"] = self._create_colormap(config["colormap_path"])
+            if len(config["instance_to_class"]) == 0:
                 self.get_logger().warn("The scene contains no semantics")
         # Get or set the initial agent pose
         agent = sim.get_agent(0)
@@ -724,25 +729,24 @@ class HabitatROSNode(Node):
         return {x.index(): x.name() for x in categories if x is not None}
 
     def _instance_to_class_map(
-        self, objects: List[hs.scene.SemanticObject], classes: Dict[int, str]
+        self, objects: List[hs.scene.SemanticObject]
     ) -> np.ndarray:
         """Given the objects in the scene, create an array that maps instance
         IDs to class IDs."""
         # Default is -1 so that an empty array is created in the following line
         # if there are no objects.
-        max_instance_id = max([get_instance_id(x) for x in objects], default=-1)
-        mapping = np.zeros(max_instance_id + 1, dtype=np.uint8)
-        for object in objects:
-            instance_id = get_instance_id(object)
-            mapping[instance_id] = object.category.index()
-            if mapping[instance_id] not in classes.keys():
-                self.get_logger().warn(
-                    'Invalid object class ID/name {}/"{}", replacing with 0/"{}"'.format(
-                        mapping[instance_id], object.category.name(), classes[0]
-                    )
-                )
-                mapping[instance_id] = 0
-        return mapping
+        object_to_cat_map = {c.id: c.category.index() for c in objects}
+        return np.array(list(object_to_cat_map.values()))
+
+    def _create_colormap(self, colormap_path: str) -> Dict[int, np.ndarray]:
+        colormap = {}
+        with open(colormap_path) as f:
+            for i, line in enumerate(f):
+                if i == 0:
+                    continue
+                _, red, green, blue, alpha, id = line.strip().split(",")
+                colormap[int(id)] = (int(red), int(green), int(blue), int(alpha))
+        return colormap
 
     def _init_publishers(self, config: Config) -> Publishers:
         """Initialize and return the image and pose publishers."""
@@ -766,6 +770,9 @@ class HabitatROSNode(Node):
             )
             pub["sem_instance"] = self.create_publisher(
                 Image, self._sem_instance_topic_name + "image_raw", image_queue_size
+            )
+            pub["sem_class_color"] = self.create_publisher(
+                Image, self._sem_class_topic_name + "colored", image_queue_size
             )
             if config["visualize_semantics"]:
                 pub["sem_class_render"] = self.create_publisher(
@@ -1093,6 +1100,16 @@ class HabitatROSNode(Node):
         msg.header.frame_id = self.config["sensor_frame"]
         return msg
 
+    def _sem_classes_color_to_msg(self, observation: Observation) -> Image:
+        """Convert the class ID image from the observation to a ROS Image
+        message."""
+        msg = self._bridge.cv2_to_imgmsg(
+            observation["sem_classes_color"].astype(np.uint8)[:, :, :3], "rgb8"
+        )
+        msg.header.stamp = observation["timestamp"]
+        msg.header.frame_id = self.config["sensor_frame"]
+        return msg
+
     def _render_sem_instances_to_msg(self, observation: Observation) -> Image:
         """Visualize an instance ID image to a ROS Image message with
         per-instance colours."""
@@ -1137,9 +1154,16 @@ class HabitatROSNode(Node):
             )
             del observation["semantic"]
             # Convert instance IDs to class IDs
-            observation["sem_classes"] = np.array(
-                [config["instance_to_class"][x] for x in observation["sem_instances"]],
+            observation["sem_classes"] = config["instance_to_class"][
+                observation["sem_instances"]
+            ]
+            observation["sem_classes_color"] = np.array(
+                [config["colormap"][x] for x in observation["sem_classes"].flatten()],
                 dtype=np.uint8,
+            ).reshape(
+                observation["sem_classes"].shape[0],
+                observation["sem_classes"].shape[1],
+                4,
             )
         # Get the camera ground truth pose (T_IC) in the habitat frame from the
         # position and orientation
@@ -1190,10 +1214,18 @@ class HabitatROSNode(Node):
             )
             del observation["semantic"]
             # Convert instance IDs to class IDs
-            observation["sem_classes"] = np.array(
-                [config["instance_to_class"][x] for x in observation["sem_instances"]],
+            observation["sem_classes"] = config["instance_to_class"][
+                observation["sem_instances"]
+            ]
+            observation["sem_classes_color"] = np.array(
+                [config["colormap"][x] for x in observation["sem_classes"].flatten()],
                 dtype=np.uint8,
+            ).reshape(
+                observation["sem_classes"].shape[0],
+                observation["sem_classes"].shape[1],
+                4,
             )
+
         # Get the camera ground truth pose (T_IC) in the habitat frame from the
         # position and orientation
         t_IC = sim.get_agent(0).get_state().position
@@ -1224,6 +1256,7 @@ class HabitatROSNode(Node):
                 self._filter_sem_classes(obs)
             pub["sem_class"].publish(self._sem_classes_to_msg(obs))
             pub["sem_instance"].publish(self._sem_instances_to_msg(obs))
+            pub["sem_class_color"].publish(self._sem_classes_color_to_msg(obs))
             # Publish semantics visualisations
             if config["visualize_semantics"]:
                 pub["sem_class_render"].publish(self._render_sem_classes_to_msg(obs))
