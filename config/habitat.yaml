@@ -16,7 +16,8 @@ allowed_classes: []
 
   # Scene settings
 scene_file: /developer/hm3d/val/00800-TEEsavR23oF/TEEsavR23oF.basis.glb
-colormap_path: /developer/ros2_hydra_ws/src/habitat-ros/config/distinct_hm3d_1000_colors.csv
+colormap_path: /developer/ros2_hydra_ws/src/habitat-ros/config/distinct_all_hm3d_colors.csv
+labels_path: /developer/ros2_hydra_ws/src/habitat-ros/config/hm3dall_label_space.yaml
   # scene_file: "~/Documents/Datasets/Matterport3D/v1/tasks/mp3d_habitat/mp3d/1LXtFkjw3qL/1LXtFkjw3qL.glb"
   # scene_file: "~/Documents/Datasets/Matterport3D/v1/tasks/mp3d_habitat/mp3d/2t7WUuJeko7/2t7WUuJeko7.glb"
   # scene_file: "~/Documents/Datasets/Replica/office_0/habitat/mesh_semantic.ply"
@@ -40,12 +41,12 @@ path_spacing_s: 0.3  # Time to wait after publishing each pose in the path
 always_publish_pose: true
 
 # Starting yaw movement
-start_360_yaw: false
+start_360_yaw: true
 start_spacing_s: 1.0
 start_num_poses: 25
 
 # Triggered start settings
-triggered_start: false
+triggered_start: true
 
 # Agent settings
 inflation_radius: 0.2

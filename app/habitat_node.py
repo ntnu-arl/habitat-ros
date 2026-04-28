@@ -310,6 +310,7 @@ class HabitatROSNode(Node):
         "allowed_classes": [],
         "scene_file": "",
         "colormap_path": "",
+        "labels_path": "",
         "initial_T_HB": [],
         "height_offset": 0.0,
         "tilt_pitch_deg": 0.0,
@@ -605,6 +606,9 @@ class HabitatROSNode(Node):
             config["instance_to_class"] = self._instance_to_class_map(
                 sim.semantic_scene.objects
             )
+            config["scene_class_to_class"] = self._scene_class_to_class_map(
+                sim.semantic_scene.categories, config["labels_path"]
+            )
             config["colormap"] = self._create_colormap(config["colormap_path"])
             if len(config["instance_to_class"]) == 0:
                 self.get_logger().warn("The scene contains no semantics")
@@ -737,6 +741,28 @@ class HabitatROSNode(Node):
         # if there are no objects.
         object_to_cat_map = {c.id: c.category.index() for c in objects}
         return np.array(list(object_to_cat_map.values()))
+
+    def _scene_class_to_class_map(
+        self, categories: List[hs.scene.SemanticCategory], labels_path: str
+    ) -> Dict[int, int]:
+        """Create a mapping from the class IDs in the scene to the allowed class
+        IDs specified in the config. This is needed because some scenes have
+        class IDs that are different from the standard ones (e.g. HM3D)."""
+        if not labels_path:
+            self.get_logger().warn(
+                "labels_path is empty, using identity mapping for scene class to class"
+            )
+            return {c.index(): c.index() for c in categories}
+        with open(labels_path) as f:
+            labelspace = yaml.safe_load(f)
+        labelspace_map = {
+            label_name["name"]: label_name["label"]
+            for label_name in labelspace["label_names"]
+        }
+        scene_label_2_cat_map = {}
+        for c in categories:
+            scene_label_2_cat_map[c.index()] = labelspace_map[c.name().lower()]
+        return scene_label_2_cat_map
 
     def _create_colormap(self, colormap_path: str) -> Dict[int, np.ndarray]:
         colormap = {}
@@ -1094,7 +1120,7 @@ class HabitatROSNode(Node):
         message."""
         # Habitat-Sim produces 8-bit per-pixel class ID images.
         msg = self._bridge.cv2_to_imgmsg(
-            observation["sem_classes"].astype(np.uint8), "8UC1"
+            observation["sem_classes"].astype(np.uint16), "16UC1"
         )
         msg.header.stamp = observation["timestamp"]
         msg.header.frame_id = self.config["sensor_frame"]
@@ -1154,9 +1180,14 @@ class HabitatROSNode(Node):
             )
             del observation["semantic"]
             # Convert instance IDs to class IDs
-            observation["sem_classes"] = config["instance_to_class"][
-                observation["sem_instances"]
-            ]
+            observation["sem_classes"] = np.asarray(
+                [
+                    config["scene_class_to_class"][label]
+                    for label in config["instance_to_class"][
+                        observation["sem_instances"]
+                    ].flatten()
+                ]
+            ).reshape(observation["sem_instances"].shape)
             observation["sem_classes_color"] = np.array(
                 [config["colormap"][x] for x in observation["sem_classes"].flatten()],
                 dtype=np.uint8,
@@ -1214,9 +1245,14 @@ class HabitatROSNode(Node):
             )
             del observation["semantic"]
             # Convert instance IDs to class IDs
-            observation["sem_classes"] = config["instance_to_class"][
-                observation["sem_instances"]
-            ]
+            observation["sem_classes"] = np.asarray(
+                [
+                    config["scene_class_to_class"][label]
+                    for label in config["instance_to_class"][
+                        observation["sem_instances"]
+                    ].flatten()
+                ]
+            ).reshape(observation["sem_instances"].shape)
             observation["sem_classes_color"] = np.array(
                 [config["colormap"][x] for x in observation["sem_classes"].flatten()],
                 dtype=np.uint8,
@@ -1254,6 +1290,10 @@ class HabitatROSNode(Node):
         if config["enable_semantics"] and config["instance_to_class"].size > 0:
             if config["allowed_classes"]:
                 self._filter_sem_classes(obs)
+            np.save("/developer/ros2_hydra_ws/sem_classes_orig.npy", obs["sem_classes"])
+            np.save(
+                "/developer/ros2_hydra_ws/sem_instances_orig.npy", obs["sem_instances"]
+            )
             pub["sem_class"].publish(self._sem_classes_to_msg(obs))
             pub["sem_instance"].publish(self._sem_instances_to_msg(obs))
             pub["sem_class_color"].publish(self._sem_classes_color_to_msg(obs))
