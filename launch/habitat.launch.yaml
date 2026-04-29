@@ -8,7 +8,7 @@ launch:
       default: $(find-pkg-share habitat_ros)/config/navmesh.json
   - arg:
       name: scene_file
-      default: /developer/hm3d/val/00800-TEEsavR23oF/TEEsavR23oF.basis.glb
+      default: /developer/hm3d/train/00440-wPLokgvCnuk/wPLokgvCnuk.basis.glb
   - arg:
       name: path_topic_name
       default: /habitat/plan_path

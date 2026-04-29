@@ -83,11 +83,13 @@ def semantic_sensor_config() -> hs.CameraSensorSpec:
 
 
 backend_config = hs.SimulatorConfiguration()
-backend_config.scene_id = "/developer/hm3d/val/00800-TEEsavR23oF/TEEsavR23oF.basis.glb"
+backend_config.scene_id = (
+    "/developer/hm3d/train/00440-wPLokgvCnuk/wPLokgvCnuk.basis.glb"
+)
 backend_config.enable_physics = False
 backend_config.allow_sliding = False
 backend_config.scene_dataset_config_file = (
-    "/developer/hm3d/val/hm3d_annotated_val_basis.scene_dataset_config.json"
+    "/developer/hm3d/train/hm3d_annotated_train_basis.scene_dataset_config.json"
 )
 agent_config = hs.AgentConfiguration()
 backend_config.gpu_device_id = -1  # Use CPU
@@ -119,7 +121,10 @@ rgb = observations[str(hs.SensorType.COLOR)][:, :, :3]
 instance_labels = observations[str(hs.SensorType.SEMANTIC)]
 # Apply category mapping to instance labels
 labels = np.asarray(
-    [scene_label_2_cat_map[label] for label in category_map[instance_labels].flatten()]
+    [
+        scene_label_2_cat_map[label]
+        for label in np.take(category_map, instance_labels, mode="clip").flatten()
+    ]
 ).reshape(instance_labels.shape)
 # Apply colormap to instance labels
 color_labels = np.array([colormap[label] for label in labels.flatten()]).reshape(

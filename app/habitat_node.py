@@ -1321,9 +1321,11 @@ class HabitatROSNode(Node):
             observation["sem_classes"] = np.asarray(
                 [
                     config["scene_class_to_class"][label]
-                    for label in config["instance_to_class"][
-                        observation["sem_instances"]
-                    ].flatten()
+                    for label in np.take(
+                        config["instance_to_class"],
+                        observation["sem_instances"],
+                        mode="clip",
+                    ).flatten()
                 ]
             ).reshape(observation["sem_instances"].shape)
             observation["sem_classes_color"] = np.array(
@@ -1386,9 +1388,11 @@ class HabitatROSNode(Node):
             observation["sem_classes"] = np.asarray(
                 [
                     config["scene_class_to_class"][label]
-                    for label in config["instance_to_class"][
-                        observation["sem_instances"]
-                    ].flatten()
+                    for label in np.take(
+                        config["instance_to_class"],
+                        observation["sem_instances"],
+                        mode="clip",
+                    ).flatten()
                 ]
             ).reshape(observation["sem_instances"].shape)
             observation["sem_classes_color"] = np.array(
