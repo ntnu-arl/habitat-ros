@@ -39,7 +39,24 @@ path_spacing_s: 0.3  # Time to wait after publishing each pose in the path
 
 # Pose publishing settings
 always_publish_pose: true
-
+# Optional RGB image degradations applied before publishing `rgb/image_raw`
+rgb_degradation:
+  enabled: false
+  pipeline: []
+  # Supported pipeline entries, applied in order:
+  # - jpeg_compress
+  # - blur
+  # - noise
+  # - posterize
+  # - downscale_upscale
+  # - reduce_light
+  jpeg_quality: 10
+  blur_radius: 2.0
+  noise_std: 25.0
+  posterize_bits: 3
+  downscale_factor: 4
+  brightness_factor: 0.45
+  random_seed: -1
 # Starting yaw movement
 start_360_yaw: true
 start_spacing_s: 1.0

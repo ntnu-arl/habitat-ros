@@ -38,6 +38,7 @@ import os
 import pathlib
 import threading
 import time
+from copy import deepcopy
 from typing import Any, Dict, List, Tuple, Union
 
 import cv2
@@ -68,6 +69,15 @@ Config = Dict[str, Any]
 Observation = hs.sensor.Observation
 Publishers = Dict[str, Any]
 Sim = hs.Simulator
+
+RGB_DEGRADATION_OPS = {
+    "jpeg_compress",
+    "blur",
+    "noise",
+    "posterize",
+    "downscale_upscale",
+    "reduce_light",
+}
 
 
 def split_pose(T: np.array) -> Tuple[np.array, quaternion.quaternion]:
@@ -329,6 +339,17 @@ class HabitatROSNode(Node):
         "triggered_start": False,
         "inflation_radius": 0.2,
         "delta_path": 0.1,
+        "rgb_degradation": {
+            "enabled": False,
+            "pipeline": [],
+            "jpeg_quality": 10,
+            "blur_radius": 2.0,
+            "noise_std": 25.0,
+            "posterize_bits": 3,
+            "downscale_factor": 4,
+            "brightness_factor": 0.45,
+            "random_seed": -1,
+        },
     }
 
     def __init__(self):
@@ -467,7 +488,7 @@ class HabitatROSNode(Node):
         self, config_path: pathlib.Path, scene_file: str = ""
     ) -> Config:
         """Read the node parameters, print them and return a dictionary."""
-        config = self._default_config.copy()
+        config = deepcopy(self._default_config)
 
         # Read the parameters from the file
         if config_path.exists():
@@ -528,9 +549,124 @@ class HabitatROSNode(Node):
             config["height_offset"] = height_offset
         if config["recording_dir"]:
             config["recording_dir"] = os.path.expanduser(config["recording_dir"])
+        config["rgb_degradation"] = self._normalize_rgb_degradation_config(
+            config.get("rgb_degradation", {})
+        )
         for name, val in config.items():
             self.get_logger().info(f"  {name}: {val}")
         return config
+
+    def _normalize_rgb_degradation_config(
+        self, raw_config: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Validate and normalize the RGB degradation configuration."""
+        defaults = deepcopy(self._default_config["rgb_degradation"])
+        if raw_config is None:
+            raw_config = {}
+        if not isinstance(raw_config, dict):
+            raise RuntimeError("rgb_degradation config must be a dictionary")
+
+        defaults.update(raw_config)
+        config = defaults
+
+        if not isinstance(config["enabled"], bool):
+            raise RuntimeError("rgb_degradation.enabled must be a boolean")
+        if not isinstance(config["pipeline"], list):
+            raise RuntimeError("rgb_degradation.pipeline must be a list")
+
+        normalized_pipeline = []
+        for op in config["pipeline"]:
+            if not isinstance(op, str):
+                raise RuntimeError("rgb_degradation.pipeline entries must be strings")
+            if op not in RGB_DEGRADATION_OPS:
+                raise RuntimeError(
+                    f"Unsupported rgb degradation '{op}'. "
+                    f"Expected one of {sorted(RGB_DEGRADATION_OPS)}"
+                )
+            normalized_pipeline.append(op)
+        config["pipeline"] = normalized_pipeline
+
+        config["jpeg_quality"] = int(config["jpeg_quality"])
+        config["posterize_bits"] = int(config["posterize_bits"])
+        config["downscale_factor"] = int(config["downscale_factor"])
+        config["random_seed"] = int(config["random_seed"])
+        config["blur_radius"] = float(config["blur_radius"])
+        config["noise_std"] = float(config["noise_std"])
+        config["brightness_factor"] = float(config["brightness_factor"])
+
+        if not 1 <= config["jpeg_quality"] <= 100:
+            raise RuntimeError("rgb_degradation.jpeg_quality must be in [1, 100]")
+        if not 1 <= config["posterize_bits"] <= 8:
+            raise RuntimeError("rgb_degradation.posterize_bits must be in [1, 8]")
+        if config["downscale_factor"] < 1:
+            raise RuntimeError("rgb_degradation.downscale_factor must be >= 1")
+        if config["blur_radius"] < 0.0:
+            raise RuntimeError("rgb_degradation.blur_radius must be >= 0")
+        if config["noise_std"] < 0.0:
+            raise RuntimeError("rgb_degradation.noise_std must be >= 0")
+        if config["brightness_factor"] < 0.0:
+            raise RuntimeError("rgb_degradation.brightness_factor must be >= 0")
+
+        return config
+
+    def _apply_rgb_degradations(self, rgb_image: np.ndarray) -> np.ndarray:
+        """Apply the configured degradation pipeline to an RGB image."""
+        degradation_config = self.config["rgb_degradation"]
+        if not degradation_config["enabled"] or not degradation_config["pipeline"]:
+            return rgb_image
+
+        degraded = rgb_image.copy()
+        seed = degradation_config["random_seed"]
+        rng = np.random.default_rng(None if seed < 0 else seed)
+
+        for op in degradation_config["pipeline"]:
+            if op == "jpeg_compress":
+                encode_params = [
+                    int(cv2.IMWRITE_JPEG_QUALITY),
+                    degradation_config["jpeg_quality"],
+                ]
+                success, encoded = cv2.imencode(".jpg", degraded, encode_params)
+                if success:
+                    decoded = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+                    if decoded is not None:
+                        degraded = decoded
+            elif op == "blur":
+                radius = degradation_config["blur_radius"]
+                if radius > 0.0:
+                    degraded = cv2.GaussianBlur(degraded, (0, 0), sigmaX=radius)
+            elif op == "noise":
+                std = degradation_config["noise_std"]
+                if std > 0.0:
+                    noise = rng.normal(0.0, std, degraded.shape)
+                    degraded = np.clip(
+                        degraded.astype(np.float32) + noise, 0, 255
+                    ).astype(np.uint8)
+            elif op == "posterize":
+                bits = degradation_config["posterize_bits"]
+                if bits < 8:
+                    shift = 8 - bits
+                    degraded = ((degraded >> shift) << shift).astype(np.uint8)
+            elif op == "downscale_upscale":
+                scale = degradation_config["downscale_factor"]
+                if scale > 1:
+                    height, width = degraded.shape[:2]
+                    small_size = (
+                        max(1, width // scale),
+                        max(1, height // scale),
+                    )
+                    degraded = cv2.resize(
+                        degraded, small_size, interpolation=cv2.INTER_LINEAR
+                    )
+                    degraded = cv2.resize(
+                        degraded, (width, height), interpolation=cv2.INTER_NEAREST
+                    )
+            elif op == "reduce_light":
+                factor = degradation_config["brightness_factor"]
+                degraded = np.clip(degraded.astype(np.float32) * factor, 0, 255).astype(
+                    np.uint8
+                )
+
+        return degraded
 
     def _broadcast_tf(self, T_HB: np.array) -> None:
         msg = TransformStamped()
@@ -1093,7 +1229,8 @@ class HabitatROSNode(Node):
 
     def _rgb_to_msg(self, observation: Observation) -> Image:
         """Convert the RGB image from the observation to a ROS Image message."""
-        msg = self._bridge.cv2_to_imgmsg(observation["rgb"], "rgb8")
+        rgb_image = self._apply_rgb_degradations(observation["rgb"])
+        msg = self._bridge.cv2_to_imgmsg(rgb_image, "rgb8")
         msg.header.stamp = observation["timestamp"]
         msg.header.frame_id = self.config["sensor_frame"]
         return msg
