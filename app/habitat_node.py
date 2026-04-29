@@ -572,9 +572,10 @@ class HabitatROSNode(Node):
         scene file."""
         backend_config = hs.SimulatorConfiguration()
         backend_config.scene_id = config["scene_file"]
+        split_path = pathlib.Path(config["scene_file"]).parent.parent
         backend_config.scene_dataset_config_file = str(
-            pathlib.Path(config["scene_file"]).parent.parent
-            / "hm3d_annotated_val_basis.scene_dataset_config.json"
+            split_path
+            / f"hm3d_annotated_{split_path.name}_basis.scene_dataset_config.json"
         )
         agent_config = hs.AgentConfiguration()
         backend_config.gpu_device_id = -1  # Use CPU
