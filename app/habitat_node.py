@@ -1432,10 +1432,6 @@ class HabitatROSNode(Node):
         if config["enable_semantics"] and config["instance_to_class"].size > 0:
             if config["allowed_classes"]:
                 self._filter_sem_classes(obs)
-            np.save("/developer/ros2_hydra_ws/sem_classes_orig.npy", obs["sem_classes"])
-            np.save(
-                "/developer/ros2_hydra_ws/sem_instances_orig.npy", obs["sem_instances"]
-            )
             pub["sem_class"].publish(self._sem_classes_to_msg(obs))
             pub["sem_instance"].publish(self._sem_instances_to_msg(obs))
             pub["sem_class_color"].publish(self._sem_classes_color_to_msg(obs))
