@@ -1019,26 +1019,22 @@ class HabitatROSNode(Node):
         path.requested_start = t_IC
         path.requested_end = goal_t_IC
         found_path = self.pathfinder.find_path(path)
+        interpolate = False
         if not found_path:
             self.get_logger().warning("Failed to find path to goal")
-            self.T_HB_mutex.release()
-            bool_msg = Bool()
-            bool_msg.data = True
-            self.pub["failed_goal"].publish(bool_msg)
-            return
+            interpolate = True
 
         if len(path.points) < 2:
             self.get_logger().warning("Path to goal is empty")
-            self.T_HB_mutex.release()
-            bool_msg = Bool()
-            bool_msg.data = True
-            self.pub["failed_goal"].publish(bool_msg)
-            return
+            interpolate = True
 
         if len(path.points) == 2:
             self.get_logger().warning(
                 "Path to goal is only two points, interpolating between start and goal"
             )
+            interpolate = True
+
+        if interpolate:
             full_path = np.concatenate(
                 (
                     self.T_HB[None, ...],
