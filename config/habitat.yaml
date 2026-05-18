@@ -50,12 +50,14 @@ rgb_degradation:
   # - posterize
   # - downscale_upscale
   # - reduce_light
+  # - gamma_correction
   jpeg_quality: 10
   blur_radius: 2.0
   noise_std: 25.0
   posterize_bits: 3
   downscale_factor: 4
   brightness_factor: 0.45
+  gamma: 1.5
   random_seed: -1
 # Starting yaw movement
 start_360_yaw: true

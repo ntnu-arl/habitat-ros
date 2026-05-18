@@ -77,6 +77,7 @@ RGB_DEGRADATION_OPS = {
     "posterize",
     "downscale_upscale",
     "reduce_light",
+    "gamma_correction",
 }
 
 
@@ -348,6 +349,7 @@ class HabitatROSNode(Node):
             "posterize_bits": 3,
             "downscale_factor": 4,
             "brightness_factor": 0.45,
+            "gamma": 1.5,
             "random_seed": -1,
         },
     }
@@ -593,6 +595,7 @@ class HabitatROSNode(Node):
         config["blur_radius"] = float(config["blur_radius"])
         config["noise_std"] = float(config["noise_std"])
         config["brightness_factor"] = float(config["brightness_factor"])
+        config["gamma"] = float(config["gamma"])
 
         if not 1 <= config["jpeg_quality"] <= 100:
             raise RuntimeError("rgb_degradation.jpeg_quality must be in [1, 100]")
@@ -606,6 +609,8 @@ class HabitatROSNode(Node):
             raise RuntimeError("rgb_degradation.noise_std must be >= 0")
         if config["brightness_factor"] < 0.0:
             raise RuntimeError("rgb_degradation.brightness_factor must be >= 0")
+        if config["gamma"] <= 0.0:
+            raise RuntimeError("rgb_degradation.gamma must be > 0")
 
         return config
 
@@ -665,6 +670,17 @@ class HabitatROSNode(Node):
                 degraded = np.clip(degraded.astype(np.float32) * factor, 0, 255).astype(
                     np.uint8
                 )
+            elif op == "gamma_correction":
+                gamma = degradation_config["gamma"]
+                if gamma != 1.0:
+                    inv_gamma = 1.0 / gamma
+                    table = np.array(
+                        [
+                            ((pixel / 255.0) ** inv_gamma) * 255
+                            for pixel in np.arange(256)
+                        ]
+                    ).astype(np.uint8)
+                    degraded = cv2.LUT(degraded, table)
 
         return degraded
 
